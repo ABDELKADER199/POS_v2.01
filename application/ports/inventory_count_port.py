@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+from typing import Dict, List, Optional, Protocol
+
+
+class InventoryCountRepositoryPort(Protocol):
+    def get_stores(self) -> List[Dict]:
+        ...
+
+    def create_session(self, count_number: str, store_id: int, count_type: str, user_id: int, notes: str = "") -> int:
+        ...
+
+    def populate_full_session(self, session_id: int, store_id: int) -> int:
+        ...
+
+    def get_sessions(self, store_id: Optional[int] = None, status: Optional[str] = None) -> List[Dict]:
+        ...
+
+    def get_session(self, session_id: int) -> Optional[Dict]:
+        ...
+
+    def get_session_items(self, session_id: int, search: str = "", limit: int = 300) -> List[Dict]:
+        ...
+
+    def search_products(self, term: str, store_id: int, limit: int = 50) -> List[Dict]:
+        ...
+
+    def add_product_to_session(self, session_id: int, product_id: int, store_id: int) -> None:
+        ...
+
+    def update_count_item(self, session_id: int, product_id: int, actual_quantity: int, notes: str, user_id: int) -> None:
+        ...
+
+    def get_counted_items(self, session_id: int) -> List[Dict]:
+        ...
+
+    def set_inventory_quantity(self, product_id: int, store_id: int, quantity: int, user_id: int, notes: str) -> None:
+        ...
+
+    def insert_adjustment(self, session_id: int, item_id: int, item: Dict, store_id: int, user_id: int) -> None:
+        ...
+
+    def mark_session_approved(self, session_id: int, user_id: int) -> None:
+        ...
+
+    def mark_session_cancelled(self, session_id: int) -> None:
+        ...
+
+    def commit(self) -> None:
+        ...
+
+    def rollback(self) -> None:
+        ...

@@ -1,0 +1,31 @@
+<div class="shell" dir="rtl">
+  <aside class="sidebar" [class.collapsed]="!sidebarOpen">
+    <div class="brand">HyperPOS</div>
+    <div class="user-card" *ngIf="user">
+      <div class="user-name">{{ user.name }}</div>
+      <div class="user-email">{{ user.email }}</div>
+    </div>
+    <nav class="nav">
+      <a
+        *ngFor="let item of visibleNav()"
+        [routerLink]="item.path"
+        routerLinkActive="active"
+        class="nav-link"
+      >
+        <span class="icon">{{ item.icon }}</span>
+        <span class="label" *ngIf="sidebarOpen">{{ item.label }}</span>
+      </a>
+    </nav>
+    <button class="logout-btn" (click)="logout()">🚪 تسجيل الخروج</button>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="toggle-btn" (click)="toggleSidebar()">☰</button>
+      <span class="topbar-title">لوحة التحكم</span>
+    </header>
+    <main class="content">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>

@@ -1,0 +1,18 @@
+@use '../products/products.component.scss' as *;
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+}
+.badge-warning { background: rgba(248, 180, 0, 0.15); color: #F8B400; }
+.badge-success { background: rgba(23, 166, 90, 0.15); color: #17A65A; }
+.badge-danger { background: rgba(226, 59, 59, 0.15); color: #E23B3B; }
+
+.success-btn {
+  background: rgba(23, 166, 90, 0.1);
+}
+.success-btn:hover {
+  background: rgba(23, 166, 90, 0.3);
+}

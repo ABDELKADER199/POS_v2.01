@@ -1,0 +1,64 @@
+<div class="drawer-wrapper">
+  <div class="drawer-card">
+    <h2 class="title">🔐 إدارة وردية الصندوق</h2>
+    
+    <div *ngIf="status">
+      
+      <!-- Drawer is CLOSED (Needs to Open) -->
+      <div *ngIf="!status.is_open">
+        <div style="background: rgba(226, 59, 59, 0.1); border: 1px solid rgba(226, 59, 59, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 24px; text-align: center;">
+          <span style="font-size: 24px;">🚫</span>
+          <p style="color: #E23B3B; font-weight: 800; font-size: 14px; margin: 8px 0 0 0;">
+            لا يوجد صندوق (وردية) مفتوح حالياً. يرجى فتح درج جديد لبدء عمليات الكاشير.
+          </p>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">رصيد العهدة (النقدية الافتتاحية)</label>
+          <div style="position: relative;">
+            <input type="number" class="form-input" [(ngModel)]="openingBalance" style="width: 100%; box-sizing: border-box; padding-right: 48px;">
+            <span style="position: absolute; right: 14px; top: 12px; color: #71819C; font-weight: 900; font-size: 14px;">ج.م</span>
+          </div>
+        </div>
+        
+        <button class="btn btn-primary" (click)="openDrawer()">🔓 فتح الوردية وبدء العمل</button>
+      </div>
+
+      <!-- Drawer is OPEN (Needs to Close) -->
+      <div *ngIf="status.is_open">
+        
+        <div style="background: rgba(23, 166, 90, 0.1); border: 1px solid rgba(23, 166, 90, 0.3); border-radius: 8px; padding: 10px; margin-bottom: 20px; text-align: center;">
+          <span style="color: #17A65A; font-weight: 900; font-size: 13px;">✅ الوردية الحالية مفتوحة وجاهزة للعمل</span>
+        </div>
+
+        <div class="summary-box">
+          <div class="summary-row">
+            <span class="summary-label">العهدة الافتتاحية:</span>
+            <span class="summary-value">{{status.drawer.opening_balance | number:'1.2-2'}} ج.م</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">صافي النقدية (مبيعات - مرتجعات):</span>
+            <span class="summary-value" style="color: #17A65A;">{{status.drawer.summary?.net_cash | number:'1.2-2'}} ج.م</span>
+          </div>
+          <hr class="divider">
+          <div class="summary-row" style="margin-bottom: 0;">
+            <span class="summary-label" style="color: #EEF4FF; font-size: 16px;">الرصيد الدفتري المتوقع:</span>
+            <span class="summary-value" style="color: #77B7FF; font-size: 18px;">{{status.drawer.expected_balance | number:'1.2-2'}} ج.م</span>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" style="color: #E23B3B;">أدخل رصيد الإغلاق الفعلي (الجرد اللحظي)</label>
+          <div style="position: relative;">
+            <input type="number" class="form-input" [(ngModel)]="closingBalance" style="width: 100%; box-sizing: border-box; padding-right: 48px; border-color: rgba(226, 59, 59, 0.4);">
+            <span style="position: absolute; right: 14px; top: 12px; color: #71819C; font-weight: 900; font-size: 14px;">ج.م</span>
+          </div>
+        </div>
+        
+        <button class="btn btn-danger" (click)="closeDrawer()">🔒 تأكيد الجرد وإغلاق الوردية</button>
+        <button class="btn btn-outline" (click)="backToCashier()">🛒 العودة إلى شاشة الكاشير</button>
+      </div>
+
+    </div>
+  </div>
+</div>

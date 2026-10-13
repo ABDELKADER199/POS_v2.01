@@ -1,0 +1,45 @@
+<div class="display-container">
+  <div class="header">HyperPOS</div>
+  
+  <div class="card">
+    
+    <!-- WELCOME MODE -->
+    <ng-container *ngIf="mode === 'welcome'">
+      <div class="mode-label">مرحبًا بك</div>
+      <div class="primary-label" style="color: #10B981;">جاهز لاستقبال الفاتورة</div>
+      <div class="secondary-label">ستظهر الأصناف والأسعار هنا أثناء البيع</div>
+    </ng-container>
+
+    <!-- ITEM MODE -->
+    <ng-container *ngIf="mode === 'item'">
+      <div class="mode-label">تمت إضافة صنف</div>
+      <div class="primary-label">{{ productName || 'صنف بدون اسم' }}</div>
+      <div class="secondary-label">
+        السعر: {{ unitPrice | number:'1.2-2' }} ج.م   |   الكمية: {{ quantity }}   |   الإجمالي: {{ lineTotal | number:'1.2-2' }} ج.م
+      </div>
+    </ng-container>
+
+    <!-- TOTALS MODE -->
+    <ng-container *ngIf="mode === 'totals'">
+      <div class="mode-label">إجمالي الفاتورة</div>
+      <div class="primary-label" style="color: #3B82F6;">{{ finalTotal | number:'1.2-2' }} ج.م</div>
+      <div class="secondary-label" style="margin-bottom: 20px;">يرجى مراجعة الإجمالي قبل الدفع</div>
+      
+      <div class="totals-grid">
+        <ng-container *ngIf="discount > 0">
+          <div class="grid-label" style="color: #94A3B8;">الإجمالي قبل الخصم</div>
+          <div class="grid-value" style="color: #94A3B8;">{{ grossTotal | number:'1.2-2' }} ج.م</div>
+          
+          <div class="grid-label" style="color: #F59E0B;">قيمة الخصم</div>
+          <div class="grid-value" style="color: #F59E0B;">{{ discount | number:'1.2-2' }} ج.م</div>
+        </ng-container>
+        
+        <div class="grid-label">الإجمالي بعد الخصم</div>
+        <div class="grid-value" style="color: #10B981;">{{ finalTotal | number:'1.2-2' }} ج.م</div>
+      </div>
+    </ng-container>
+
+  </div>
+
+  <div class="footer">شكرًا لتسوقكم معنا</div>
+</div>

@@ -1,0 +1,131 @@
+<div class="dashboard-container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="brand" style="color: #9254DE;">🚚 اللوجستيات</div>
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد والتسويات</button>
+    <button class="nav-link active">التحويلات المخزنية</button>
+    
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF; font-weight: 900;" routerLink="/cashier">🛒 العودة للكاشير</button>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">📦 التحويلات المخزنية بين الفروع (Store Transfers)</h1>
+      <button class="btn btn-primary" style="width: auto; padding: 10px 24px;" (click)="showModal = true">➕ إنشاء تحويل بضاعة جديد</button>
+    </div>
+
+    <div class="toolbar" style="margin-bottom: 24px; display: flex; gap: 16px;">
+      <select class="form-input" style="flex: 1;" [(ngModel)]="filterStatus" (change)="loadData()">
+        <option value="All">عرض كل الحالات</option>
+        <option value="Pending">قيد الانتظار (Pending)</option>
+        <option value="Received">تم الاستلام (Received)</option>
+        <option value="Cancelled">ملغى (Cancelled)</option>
+      </select>
+      <button class="btn btn-outline" style="width: auto; flex: none; padding: 10px 20px;" (click)="loadData()">🔄 تحديث</button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-container">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>رقم التحويل</th>
+            <th>المنتج</th>
+            <th>الكمية</th>
+            <th>من (المصدر)</th>
+            <th>إلى (المستقبل)</th>
+            <th>الحالة</th>
+            <th>تاريخ النقل</th>
+            <th style="min-width: 160px; text-align: center;">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngIf="transfers.length === 0">
+            <td colspan="8" style="text-align: center; padding: 30px; color: #71819C;">لا يوجد تحويلات مخزنية بناءً على هذا الفلتر.</td>
+          </tr>
+          <tr *ngFor="let t of transfers">
+            <td style="color: #EEF4FF; font-weight: bold;">{{ t.transfer_number }}</td>
+            <td style="color: #77B7FF;">{{ t.product_name }}</td>
+            <td style="font-weight: 900; font-size: 16px;">{{ t.quantity_sent }}</td>
+            <td style="color: #F8B400;">{{ t.from_store_name }}</td>
+            <td style="color: #17A65A;">{{ t.to_store_name }}</td>
+            <td>
+              <span class="badge" 
+                [ngClass]="{'badge-warning': t.status === 'Pending', 'badge-success': t.status === 'Received', 'badge-danger': t.status === 'Cancelled'}">
+                {{ t.status === 'Pending' ? 'بالطريق/قيد الانتظار' : (t.status === 'Received' ? 'مكتمل' : 'ملغى') }}
+              </span>
+            </td>
+            <td style="color: #71819C; font-size: 13px;">{{ t.transfer_date | date:'short' }}</td>
+            <td style="text-align: center;">
+              <ng-container *ngIf="t.status === 'Pending'">
+                <button class="action-btn success-btn" title="تأكيد الاستلام بالمخزن" (click)="receive(t.id)">✅</button>
+                <button class="action-btn del-btn" title="إلغاء ورد البضاعة" (click)="cancel(t.id)">❌</button>
+              </ng-container>
+              <ng-container *ngIf="t.status !== 'Pending'">
+                <span style="color: #384A6B; font-size: 12px; font-weight: 800;">لا يوجد إجراء</span>
+              </ng-container>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal for New Transfer -->
+<div class="modal-overlay" *ngIf="showModal">
+  <div class="modal" style="max-width: 600px;">
+    <div class="modal-header">
+      <h2 style="margin: 0; color: #fff;">تحويل مخزني جديد</h2>
+      <button class="action-btn del-btn" (click)="showModal = false">✖</button>
+    </div>
+    
+    <div class="form-grid">
+       <div class="form-group">
+          <label class="form-label">الفرع المصدر (من)</label>
+          <select class="form-select" [(ngModel)]="transferForm.from_store_id">
+             <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+          </select>
+       </div>
+       <div class="form-group">
+          <label class="form-label">الفرع المستقبل (إلى)</label>
+          <select class="form-select" [(ngModel)]="transferForm.to_store_id">
+             <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+          </select>
+       </div>
+       
+       <div class="form-group" style="grid-column: span 2;">
+          <label class="form-label">بحث المنتجات</label>
+          <div style="display: flex; gap: 10px;">
+             <input type="text" class="form-input" style="flex: 1;" placeholder="بحث باسم المنتج أو الكود..." [(ngModel)]="searchQuery" (keyup.enter)="searchProducts()">
+             <button class="btn btn-primary" style="width: auto;" (click)="searchProducts()">بحث 🔍</button>
+          </div>
+       </div>
+
+       <div class="form-group" style="grid-column: span 2;" *ngIf="products.length > 0">
+          <label class="form-label">المنتج المراد تحويله</label>
+          <select class="form-select" [(ngModel)]="transferForm.product_id">
+             <option *ngFor="let p of products" [value]="p.id">{{ p.product_name }}</option>
+          </select>
+       </div>
+
+       <div class="form-group">
+          <label class="form-label">الكمية</label>
+          <input type="number" min="1" class="form-input" [(ngModel)]="transferForm.quantity">
+       </div>
+       
+       <div class="form-group">
+          <label class="form-label">ملاحظات التحويل</label>
+          <input type="text" class="form-input" [(ngModel)]="transferForm.notes">
+       </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 24px;">
+      <button class="btn btn-outline" (click)="showModal = false">تراجع</button>
+      <button class="btn btn-primary" (click)="saveTransfer()">🚀 تسجيل وإرسال التحويل</button>
+    </div>
+  </div>
+</div>

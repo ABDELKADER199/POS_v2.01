@@ -1,0 +1,36 @@
+        role_id = user_info.get('role_id', 3)
+
+        # Build tabs based on role
+        if role_id in [99, 1, 3]:  # Developer, Admin, Cashier (Mirrored in old app)
+            # Full Access
+            self.tabs.addTab(StatsView(self.stats_ctrl, user_info), "📊 الإحصائيات")
+            self.tabs.addTab(AdminView(self.admin_ctrl, user_info), "🛡️ لوحة الإدارة")
+            self.tabs.addTab(ProductView(self.product_ctrl, user_info), "📦 إدارة المنتجات")
+            self.tabs.addTab(PurchasesView(self.purchases_ctrl, user_info), "🚛 المشتريات والموردين")
+            self.tabs.addTab(AccountsView(self.accounts_ctrl, user_info), "💰 الحسابات والمالية")
+            self.tabs.addTab(PromotionsView(self.accounts_ctrl, user_info), "🎫 العروض")
+            self.tabs.addTab(ReturnsView(self.returns_ctrl, user_info), "🔄 مرجع فواتير")
+            self.tabs.addTab(CashierView(self.cashier_ctrl, user_info), "💻 الكاشير")
+            self.tabs.addTab(CallCenterView(self.callcenter_ctrl, user_info), "📞 Call Center")
+            self.tabs.addTab(DrawerView(self.drawer_ctrl, user_info), "💵 درج الكاشير")
+            self.tabs.addTab(SettingsView(user_info), "⚙️ الإعدادات")
+
+        elif role_id == 2:  # Manager
+            self.tabs.addTab(StatsView(self.stats_ctrl, user_info), "📊 الإحصائيات")
+            self.tabs.addTab(AdminView(self.admin_ctrl, user_info), "🛡️ لوحة الإدارة")
+            self.tabs.addTab(ProductView(self.product_ctrl, user_info), "📦 إدارة المنتجات")
+            self.tabs.addTab(PurchasesView(self.purchases_ctrl, user_info), "🚛 المشتريات والموردين")
+            self.tabs.addTab(AccountsView(self.accounts_ctrl, user_info), "💰 الحسابات والمالية")
+            self.tabs.addTab(PromotionsView(self.accounts_ctrl, user_info), "🎫 العروض")
+            self.tabs.addTab(ReturnsView(self.returns_ctrl, user_info), "🔄 مرجع فواتير")
+            self.tabs.addTab(CashierView(self.cashier_ctrl, user_info), "💻 الكاشير")
+            self.tabs.addTab(CallCenterView(self.callcenter_ctrl, user_info), "📞 Call Center")
+            self.tabs.addTab(DrawerView(self.drawer_ctrl, user_info), "💵 درج الكاشير")
+            # Manager has NO Settings in old app
+
+        elif role_id == 4:  # Call Center
+            self.tabs.addTab(CallCenterView(self.callcenter_ctrl, user_info), "📞 Call Center")
+
+        elif role_id == 5:  # Warehouse
+            self.tabs.addTab(ProductView(self.product_ctrl, user_info), "📦 المنتجات")
+            self.tabs.addTab(AccountsView(self.accounts_ctrl, user_info), "💰 الحسابات")

@@ -1,0 +1,90 @@
+<div class="dashboard-container">
+  <div class="sidebar">
+    <div class="brand" style="color: #E23B3B;">↩️ إدارة المرتجعات</div>
+    
+    <button class="nav-link active">🔄 مرتجعات المبيعات</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF; font-weight: 900;" routerLink="/cashier">🛒 العودة لشاشة البيع</button>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">إرجاع المنتجات والمبالغ النقدية</h1>
+    </div>
+
+    <!-- Search Section -->
+    <div class="toolbar" style="display: flex; gap: 12px; align-items: stretch;">
+      <div class="search-box" style="flex: 3;">
+        <input type="text" class="search-input" placeholder="أدخل رقم الفاتورة للبحث (مثال: INV-123)..." 
+               [(ngModel)]="invoiceNumber" (keyup.enter)="search()" style="height: 100%;">
+      </div>
+      <button class="btn btn-primary" (click)="search()" style="flex: 1; font-size: 16px;">🔍 عرض الفاتورة</button>
+    </div>
+
+    <!-- Invoice Details & Items -->
+    <div *ngIf="invoiceDetails" style="background: #0F172A; border: 1px solid #263957; border-radius: 16px; padding: 24px; margin-bottom: 20px;">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #263957; padding-bottom: 16px; margin-bottom: 20px;">
+        <div>
+          <h3 style="color: #77B7FF; font-weight: 900; margin: 0 0 8px 0; font-size: 20px;">
+            محتويات الفاتورة: {{invoiceDetails.invoice.invoice_number}}
+          </h3>
+          <span style="color: #AAB8D0; font-size: 13px;">تاريخ الفاتورة: {{ invoiceDetails.invoice.created_at | date:'medium' }}</span>
+        </div>
+        <div style="text-align: left;">
+          <div style="color: #17A65A; font-weight: 900; font-size: 18px;">المُسدد: {{invoiceDetails.invoice.total_amount | number:'1.2-2'}} ج.م</div>
+          <div style="color: #71819C; font-size: 13px; margin-top: 4px;">طريقة الدفع: {{invoiceDetails.invoice.payment_method === 'cash' ? 'نقداً (خزينة)' : invoiceDetails.invoice.payment_method}}</div>
+        </div>
+      </div>
+
+      <div class="table-container" style="margin-bottom: 24px;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">رد</th>
+              <th>المنتج</th>
+              <th>سعر الوحدة</th>
+              <th>متاح للرد</th>
+              <th style="width: 140px;">الكمية المستردة</th>
+              <th>القيمة المستردة</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of itemsToReturn" [ngStyle]="{'background': item.selected ? 'rgba(47, 107, 255, 0.05)' : ''}">
+              <td style="text-align: center;">
+                <input type="checkbox" [(ngModel)]="item.selected" [disabled]="item.available_to_return === 0" style="width: 18px; height: 18px; cursor: pointer;">
+              </td>
+              <td>
+                <div style="color: #fff; font-weight: 800; font-size: 15px;">{{item.product_name}}</div>
+                <div *ngIf="item.returned_quantity > 0" style="color: #E23B3B; font-size: 11px; margin-top: 4px;">
+                  ⚠️ تم إرجاع {{item.returned_quantity}} سابقاً
+                </div>
+              </td>
+              <td style="color: #AAB8D0; font-weight: bold;">{{item.unit_price | number:'1.2-2'}} ج.م</td>
+              <td style="color: #17A65A; font-weight: 900; font-size: 16px;">{{item.available_to_return}}</td>
+              <td>
+                <input type="number" class="form-input" [(ngModel)]="item.return_qty" 
+                       [max]="item.available_to_return" min="0" 
+                       [disabled]="!item.selected"
+                       style="width: 100px; padding: 6px 10px; text-align: center;">
+              </td>
+              <td style="color: #E23B3B; font-weight: 900; font-size: 16px;">
+                {{ item.selected ? (item.return_qty * item.unit_price) : 0 | number:'1.2-2' }} ج.م
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display: flex; gap: 16px; align-items: stretch; background: rgba(15, 23, 42, 0.5); padding: 16px; border-radius: 12px; border: 1px solid #1C2C48;">
+        <div class="search-box" style="flex: 2;">
+          <input type="text" class="search-input" [(ngModel)]="returnReason" placeholder="سبب المرتجع (اختياري، يظهر في التقارير)" style="height: 100%;">
+        </div>
+        <button class="btn btn-danger" style="flex: 1; font-size: 16px; height: 50px;" (click)="processReturn()">
+          ⚠️ تأكيد استرداد المال وصرف المرتجع
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>

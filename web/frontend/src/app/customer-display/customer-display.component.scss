@@ -1,0 +1,87 @@
+.display-container {
+  background-color: #020617;
+  color: #EEF4FF;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 28px;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+  direction: rtl;
+}
+
+.header {
+  text-align: center;
+  font-size: 40px;
+  font-weight: 900;
+  color: #10B981;
+  padding: 10px;
+  margin-bottom: 18px;
+}
+
+.card {
+  background-color: #0F172A;
+  border: 1px solid #1C2C48;
+  border-radius: 24px;
+  padding: 40px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.mode-label {
+  font-size: 32px;
+  font-weight: bold;
+  color: #94A3B8;
+  margin-bottom: 20px;
+}
+
+.primary-label {
+  font-size: 54px;
+  font-weight: 900;
+  color: #10B981; /* Default, overridden inline in totals */
+  margin-bottom: 20px;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+.secondary-label {
+  font-size: 30px;
+  font-weight: bold;
+  color: #94A3B8;
+  word-wrap: break-word;
+}
+
+.totals-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  row-gap: 16px;
+  column-gap: 30px;
+  width: 100%;
+  max-width: 600px;
+  margin-top: 10px;
+}
+
+.grid-label {
+  text-align: right;
+  font-size: 28px;
+  font-weight: bold;
+  color: #EEF4FF;
+}
+
+.grid-value {
+  text-align: left;
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.footer {
+  text-align: center;
+  font-size: 26px;
+  font-weight: bold;
+  color: #10B981;
+  margin-top: 18px;
+}

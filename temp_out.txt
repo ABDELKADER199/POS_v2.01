@@ -1,0 +1,66 @@
+﻿
+      widget = factory()
+    File "D:\Python Desktop\POS_V2\main.py", line 368, in <lambda>
+      "purchases": (lambda: PurchasesView(self.purchases_ctrl, user_info), "ًںڑ› ط§ظ„ظ…ط´طھط±ظٹط§طھ 
+ظˆط§ظ„ظ…ظˆط±ط¯ظٹظ†"),
+                            ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "D:\Python Desktop\POS_V2\ui\purchases_view.py", line 49, in __init__
+      self._load_history()
+      ~~~~~~~~~~~~~~~~~~^^
+    File "D:\Python Desktop\POS_V2\ui\purchases_view.py", line 1011, in _load_history
+      history = self.ctrl.get_purchase_history()
+    File "D:\Python Desktop\POS_V2\application\services\purchases_service_facade.py", line 79, in get_purchase_history
+      return self.purchase_history_use_case.execute()
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+    File "D:\Python Desktop\POS_V2\application\use_cases\purchases.py", line 387, in execute
+      return self.repo.get_purchase_history()
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+>   File "D:\Python Desktop\POS_V2\repositories\purchases_repo.py", line 460, in get_purchase_history
+      return self._fetch_all("""
+             ~~~~~~~~~~~~~~~^^^^
+          SELECT pi.id, pi.invoice_number, s.name as supplier_name,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      ...<7 lines>...
+          LIMIT 100
+          ^^^^^^^^^
+      """)
+      ^^^^
+    File "D:\Python Desktop\POS_V2\repositories\base_repo.py", line 26, in _fetch_all
+      return self.db.fetch_all(query, params)
+             ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+    File "D:\Python Desktop\POS_V2\repositories\db_connection.py", line 216, in fetch_all
+      self.execute(query, params)
+      ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+      ~~~~~~~~~~~~~^^
+    File "D:\Python Desktop\POS_V2\ui\accounts_view.py", line 223, in _init_ui
+      self.tabs.addTab(self._scrollable_tab(PurchasesView(self.purchases_ctrl, self.user)), "ط§ظ„ظ…ط´طھط±ظٹط§طھ")
+                                            ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "D:\Python Desktop\POS_V2\ui\purchases_view.py", line 49, in __init__
+      self._load_history()
+      ~~~~~~~~~~~~~~~~~~^^
+    File "D:\Python Desktop\POS_V2\ui\purchases_view.py", line 1011, in _load_history
+      history = self.ctrl.get_purchase_history()
+    File "D:\Python Desktop\POS_V2\application\services\purchases_service_facade.py", line 79, in get_purchase_history
+      return self.purchase_history_use_case.execute()
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+    File "D:\Python Desktop\POS_V2\application\use_cases\purchases.py", line 387, in execute
+      return self.repo.get_purchase_history()
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+>   File "D:\Python Desktop\POS_V2\repositories\purchases_repo.py", line 460, in get_purchase_history
+      return self._fetch_all("""
+             ~~~~~~~~~~~~~~~^^^^
+          SELECT pi.id, pi.invoice_number, s.name as supplier_name,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      ...<7 lines>...
+          LIMIT 100
+          ^^^^^^^^^
+      """)
+      ^^^^
+    File "D:\Python Desktop\POS_V2\repositories\base_repo.py", line 26, in _fetch_all
+      return self.db.fetch_all(query, params)
+             ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+    File "D:\Python Desktop\POS_V2\repositories\db_connection.py", line 216, in fetch_all
+      self.execute(query, params)
+      ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+
+

@@ -1,0 +1,255 @@
+<div class="toolbar">
+  <span class="toolbar-title">🛒 فاتورة جديدة</span>
+
+  <span class="drawer-status" [ngClass]="drawerOpen ? 'drawer-open' : 'drawer-closed'">
+    {{ drawerOpen ? 'درج مفتوح' : 'لا يوجد درج مفتوح' }}
+  </span>
+  <button class="toolbar-btn btn-success" (click)="openDrawer()" *ngIf="!drawerOpen">🔓 فتح درج</button>
+  <button class="toolbar-btn btn-danger" (click)="closeDrawer()" *ngIf="drawerOpen">🔒 غلق درج</button>
+
+  <div class="toolbar-spacer"></div>
+
+  <button class="toolbar-btn btn-warning" (click)="showOrdersDialog = true">📦 الطلبات</button>
+  <button class="toolbar-btn btn-primary" (click)="showHeldInvoices = true; loadHeldInvoices()">⏸️ المعلقة</button>
+  <button class="toolbar-btn btn-outline" (click)="showHistoryDialog = true">📜 السجل</button>
+  <button class="toolbar-btn btn-info" (click)="showInquiryDialog = true">🔍 استعلام</button>
+  <a class="toolbar-btn btn-primary" href="/customer-display" target="_blank">🖥️ شاشة العميل</a>
+
+  <button class="toolbar-btn btn-secondary" routerLink="/admin/products" style="margin-right: 10px;">⚙️ الإدارة</button>
+  <button class="toolbar-btn btn-secondary" (click)="logout()">🚪 خروج</button>
+</div>
+
+<div class="main-content">
+  <!-- Left Panel -->
+  <div class="left-panel">
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <!-- Notice the (keyup.enter) so it only requests DB when user finishes typing -->
+      <input type="text" class="search-input" placeholder="امسح الباركود أو ابحث بالاسم ثم اضغط Enter..."
+             [(ngModel)]="searchQuery" (keyup.enter)="onSearchEnter()" #searchInput>
+    </div>
+
+    <!-- Search Results (Only shown when there are multiple or not exact match) -->
+    <div class="search-results" *ngIf="searchResults.length > 0">
+      <table>
+        <thead>
+          <tr>
+            <th>الكود</th>
+            <th>المنتج</th>
+            <th>السعر</th>
+            <th>إضافة</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let p of searchResults">
+            <td>{{ p.barcode || p.product_code || '-' }}</td>
+            <td>{{ p.product_name }}</td>
+            <td>{{ p.sell_price | number:'1.2-2' }}</td>
+            <td><button class="add-btn" (click)="addSearchResult(p)">إضافة</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="invoice-header">🛒 الفاتورة الحالية</h3>
+
+    <div class="invoice-table-wrapper">
+      <table class="invoice-table">
+        <thead>
+          <tr>
+            <th>الكود</th>
+            <th>المنتج</th>
+            <th>السعر</th>
+            <th>الكمية</th>
+            <th>الإجمالي</th>
+            <th>حذف</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of cart; let i = index">
+            <td>{{ item.barcode || item.product_code || '-' }}</td>
+            <td>{{ item.product_name }}</td>
+            <td>{{ (item.sell_price || item.unit_price) | number:'1.2-2' }}</td>
+            <td>
+              <input type="number" class="qty-input" min="1" step="1"
+                     [(ngModel)]="item.qty" (ngModelChange)="updateQty(item, $event)">
+            </td>
+            <td>{{ ((item.sell_price || item.unit_price) * item.qty) | number:'1.2-2' }}</td>
+            <td><button class="delete-btn" (click)="remove(item)">🗑</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="items-count">
+      عدد الأصناف: {{ cart.length }} | الكميات: {{ totalQty }}
+    </div>
+
+    <div class="shortcuts-hint">
+      <span class="shortcut"><kbd>F12</kbd> دفع وطباعة</span>
+      <span class="shortcut"><kbd>Ctrl+S</kbd> تعليق</span>
+      <span class="shortcut"><kbd>Ctrl+F</kbd> بحث</span>
+      <span class="shortcut"><kbd>Del</kbd> مسح الصنف (غير متوفر كاختصار حاليا)</span>
+    </div>
+
+  </div>
+
+  <!-- Right Panel -->
+  <div class="right-panel">
+    <!-- Customer Info -->
+    <div class="group-box">
+      <div class="group-title">👤 بيانات العميل</div>
+
+      <div class="form-row">
+        <label class="form-label">الاسم:</label>
+        <input type="text" class="form-input" placeholder="اسم العميل (اختياري)" [(ngModel)]="customerName">
+      </div>
+      <div class="form-row">
+        <label class="form-label">الهاتف:</label>
+        <input type="text" class="form-input" placeholder="رقم الهاتف" [(ngModel)]="customerPhone">
+      </div>
+      <div class="form-row">
+        <label class="form-label">العنوان:</label>
+        <input type="text" class="form-input" placeholder="العنوان" [(ngModel)]="customerAddress">
+      </div>
+    </div>
+
+    <!-- Payment Details -->
+    <div class="group-box">
+      <div class="group-title">💳 تفاصيل الدفع</div>
+
+      <div class="form-row">
+        <label class="form-label">الخصم:</label>
+        <input type="number" class="form-input" min="0" [(ngModel)]="discount" (ngModelChange)="updateTotals()">
+      </div>
+      <div class="form-row">
+        <label class="form-label">نوع الدفع:</label>
+        <select class="form-select" [(ngModel)]="paymentMethod" (ngModelChange)="onPaymentMethodChange()">
+          <option value="Cash">Cash (كاش)</option>
+          <option value="Card">Card (فيزا)</option>
+          <option value="Credit">Credit (آجل)</option>
+          <option value="Mixed">Mixed (مختلط)</option>
+        </select>
+      </div>
+
+      <div class="split-row" *ngIf="paymentMethod === 'Mixed'">
+        <input type="number" class="form-input" placeholder="نقدًا" [(ngModel)]="cashAmount" (ngModelChange)="onAmountChange()">
+        <input type="number" class="form-input" placeholder="فيزا" [(ngModel)]="cardAmount" (ngModelChange)="onAmountChange()">
+      </div>
+
+      <div class="form-row" *ngIf="paymentMethod !== 'Mixed'">
+        <label class="form-label">المدفوع:</label>
+        <input type="number" class="form-input" [(ngModel)]="paidAmount" (ngModelChange)="onAmountChange()">
+      </div>
+    </div>
+
+    <!-- Totals -->
+    <div class="summary-row">
+      <span class="summary-label">المجموع الفرعي:</span>
+      <span class="summary-value">{{ cartTotals.subtotal | number:'1.2-2' }} ج.م</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">ضريبة (VAT):</span>
+      <span class="summary-value">{{ cartTotals.tax | number:'1.2-2' }} ج.م</span>
+    </div>
+
+    <div class="total-display">
+      {{ cartTotals.total | number:'1.2-2' }} ج.م
+    </div>
+
+    <div class="change-display">
+      الباقي: {{ change | number:'1.2-2' }} ج.م
+    </div>
+
+    <!-- Actions -->
+    <div class="action-buttons">
+      <button class="checkout-btn" [disabled]="cart.length === 0" (click)="checkout(false)">✅ دفع وطباعة (F12)</button>
+      <button class="checkout-btn" style="background-color: #475569;" [disabled]="cart.length === 0" (click)="checkout(true)">📄 دفع وحفظ PDF</button>
+
+      <div class="sub-actions">
+        <button [ngClass]="isTaxInvoice ? 'btn-success' : 'btn-purple'" (click)="toggleTaxInvoice()">
+          {{ isTaxInvoice ? '🧾 ضريبية (مفعل)' : '🧾 فاتورة ضريبية' }}
+        </button>
+        <button class="btn-warning" (click)="holdInvoice()" [disabled]="cart.length === 0">⏸️ تعليق</button>
+        <button class="btn-danger" (click)="clearCart()">🗑️ مسح</button>
+      </div>
+    </div>
+
+    <div class="status-bar" [ngClass]="statusKind">
+      {{ statusMessage }}
+    </div>
+  </div>
+</div>
+
+<!-- Held Invoices Modal -->
+<div class="modal-overlay" *ngIf="showHeldInvoices">
+  <div class="modal">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 class="modal-title" style="margin: 0;">Фواتير المعلقة</h3>
+      <button class="modal-close" (click)="showHeldInvoices = false">✖ إغلاق</button>
+    </div>
+    <div *ngIf="heldInvoices.length === 0" style="text-align: center; color: #71819C; padding: 20px;">
+      لا توجد فواتير معلقة
+    </div>
+    <div class="held-card" *ngFor="let inv of heldInvoices">
+      <div>
+        <div style="font-weight: 800; color: #fff; margin-bottom: 4px;">{{ inv.notes || inv.reference_note || 'بدون ملاحظة' }}</div>
+        <div style="font-size: 11px; color: #AAB8D0;">عدد الأصناف: {{ inv.items?.length || 0 }} | السعر: {{ inv.total || 0 | number:'1.2-2' }} ج.م</div>
+      </div>
+      <div>
+        <button class="btn-success toolbar-btn" (click)="restoreHeld(inv)" style="margin-right: 8px;">استرجاع</button>
+        <button class="btn-danger toolbar-btn" (click)="deleteHeld(inv.id)">حذف</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Inquiry Modal -->
+<div class="modal-overlay" *ngIf="showInquiryDialog">
+  <div class="modal" style="min-width: 400px; max-width: 450px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 class="modal-title" style="margin: 0; color: #0EA5C6;">🔍 استعلام عن السعر والمخزون</h3>
+      <button class="modal-close" (click)="showInquiryDialog = false; inquiryResult = null; inquiryQuery = ''">✖</button>
+    </div>
+
+    <input type="text" class="search-input" style="margin-bottom: 16px;" placeholder="امسح الباركود هنا..."
+           [(ngModel)]="inquiryQuery" (keyup.enter)="onInquiryEnter()">
+
+    <div *ngIf="inquiryResult" style="background: #17233B; padding: 16px; border-radius: 12px; text-align: center;">
+      <div style="font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 10px;">{{ inquiryResult.product_name }}</div>
+      <div style="color: #17A65A; font-size: 22px; font-weight: 800; margin-bottom: 6px;">{{ (inquiryResult.sell_price || inquiryResult.unit_price) | number:'1.2-2' }} ج.م</div>
+      <div style="color: #AAB8D0; font-size: 13px;">الرصيد المتاح: <b>{{ inquiryResult.stock || 0 }}</b></div>
+      <div style="color: #AAB8D0; font-size: 13px;">الباركود: {{ inquiryResult.barcode }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Orders Modal (Mock) -->
+<div class="modal-overlay" *ngIf="showOrdersDialog">
+  <div class="modal">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 class="modal-title" style="margin: 0; color: #E18409;">📦 طلبات الدليفري</h3>
+      <button class="modal-close" (click)="showOrdersDialog = false">✖</button>
+    </div>
+    <div style="text-align: center; color: #71819C; padding: 30px;">
+      لا توجد طلبات جارية حالياً.<br>
+      <small style="font-size: 11px;">(جاري ربط هذه الميزة بسيرفر الدليفري)</small>
+    </div>
+  </div>
+</div>
+
+<!-- History Modal (Mock) -->
+<div class="modal-overlay" *ngIf="showHistoryDialog">
+  <div class="modal">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h3 class="modal-title" style="margin: 0; color: #EEF4FF;">📜 السجل والمرتجعات</h3>
+      <button class="modal-close" (click)="showHistoryDialog = false">✖</button>
+    </div>
+    <input type="text" class="search-input" style="margin-bottom: 16px;" placeholder="بحث برقم الفاتورة...">
+    <div style="text-align: center; color: #71819C; padding: 30px;">
+      أدخل رقم الفاتورة للبحث عنها وتعديلها أو إرجاعها.<br>
+      <small style="font-size: 11px;">(جاري تفعيل سجل الفواتير)</small>
+    </div>
+  </div>
+</div>
+

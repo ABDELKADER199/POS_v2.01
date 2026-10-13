@@ -1,0 +1,11 @@
+with open(r'd:\Python Desktop\POS_V2\repositories\purchases_repo.py', 'a', encoding='utf-8') as f:
+    f.write('\n    def search_product(self, term: str):\n')
+    f.write('        like_term = f"%{term}%"\n')
+    f.write('        query = """\n')
+    f.write('            SELECT p.id, p.product_code, p.product_name as name, p.barcode,\n')
+    f.write('                   p.buy_price, p.cost_price as cost, p.supplier_id\n')
+    f.write('            FROM products p\n')
+    f.write('            WHERE p.product_name LIKE %s OR p.barcode = %s OR p.product_code = %s\n')
+    f.write('            LIMIT 50\n')
+    f.write('        """\n')
+    f.write('        return self._fetch_all(query, (like_term, term, term))\n\n')

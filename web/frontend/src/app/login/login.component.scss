@@ -1,0 +1,242 @@
+/* ═══════════════════════════════════════════════════════
+   HyperPOS Login – Premium Dark POS Theme
+   ═══════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(47, 107, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #040B16 0%, #0B1220 30%, #0F172A 100%);
+  direction: rtl;
+  font-family: 'Cairo', 'Tahoma', 'Segoe UI', sans-serif;
+}
+
+.login-shell {
+  width: min(100%, 980px);
+  min-height: 620px;
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  background: rgba(10, 17, 29, 0.82);
+  border: 1px solid rgba(119, 183, 255, 0.18);
+  border-radius: 26px;
+  overflow: hidden;
+  box-shadow: 0 28px 60px rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(10px);
+}
+
+.brand-panel {
+  position: relative;
+  padding: 42px 38px;
+  background:
+    linear-gradient(160deg, rgba(15, 23, 42, 0.9), rgba(11, 17, 32, 0.85)),
+    radial-gradient(circle at top left, rgba(47, 107, 255, 0.25), transparent 35%);
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.brand-panel::before {
+  content: "";
+  position: absolute;
+  inset: 24px;
+  border: 1px solid rgba(119, 183, 255, 0.12);
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 78px;
+  height: 78px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #2F6BFF, #7C3AED);
+  box-shadow: 0 18px 40px rgba(47, 107, 255, 0.35);
+  font-size: 34px;
+  font-weight: 900;
+  color: white;
+  margin-bottom: 18px;
+}
+
+.brand-title {
+  margin: 0;
+  color: #EEF4FF;
+  font-size: 2.3rem;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.brand-subtitle {
+  margin-top: 12px;
+  color: #A8B9D8;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  max-width: 420px;
+}
+
+.feature-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #DCE9FF;
+  font-weight: 700;
+  font-size: 0.99rem;
+}
+
+.feature-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(47, 107, 255, 0.12);
+  color: #7BB7FF;
+  font-size: 18px;
+}
+
+.login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 26px;
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 30px 26px 22px;
+  border-radius: 22px;
+  background: rgba(12, 18, 31, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.card-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.card-kicker {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(47, 107, 255, 0.12);
+  color: #7BB7FF;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  margin: 0;
+  color: #F8FBFF;
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.form-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+::ng-deep .mat-mdc-form-field {
+  direction: rtl;
+}
+
+::ng-deep .mdc-text-field {
+  border-radius: 14px !important;
+  background: rgba(15, 26, 48, 0.8) !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+::ng-deep .mat-mdc-form-field-focus-overlay {
+  background: transparent !important;
+}
+
+::ng-deep .mdc-text-field--focused {
+  border-color: rgba(119, 183, 255, 0.7) !important;
+  box-shadow: 0 0 0 1px rgba(119, 183, 255, 0.25);
+}
+
+::ng-deep .mat-mdc-form-field-label {
+  color: #A8B9D8 !important;
+}
+
+::ng-deep .mat-mdc-input-element {
+  color: #EEF4FF !important;
+}
+
+::ng-deep .mat-mdc-form-field-infix {
+  min-height: 52px;
+}
+
+.error-box {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(226, 59, 59, 0.08);
+  border: 1px solid rgba(226, 59, 59, 0.3);
+  color: #FFB4B4;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.submit-btn {
+  width: 100%;
+  height: 52px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2F6BFF 0%, #4F8CFF 100%);
+  color: white;
+  font-size: 1.05rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 16px 30px rgba(47, 107, 255, 0.28);
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(47, 107, 255, 0.35);
+}
+
+.submit-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.footer-note {
+  margin-top: 18px;
+  text-align: center;
+  color: #8394B3;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 820px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .brand-panel {
+    border-left: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  }
+}

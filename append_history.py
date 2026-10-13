@@ -1,0 +1,13 @@
+with open(r'd:\Python Desktop\POS_V2\repositories\purchases_repo.py', 'a', encoding='utf-8') as f:
+    f.write('\n    def get_purchase_history(self):\n')
+    f.write('        return self._fetch_all("""\n')
+    f.write('            SELECT pi.id, pi.invoice_number, s.name as supplier_name,\n')
+    f.write('                   pi.invoice_date as created_at, pi.total_amount, pi.paid_amount,\n')
+    f.write('                   pi.remaining_amount, pi.payment_status, pi.status,\n')
+    f.write('                   u.name as user_name, pi.supplier_id\n')
+    f.write('            FROM purchase_invoices pi\n')
+    f.write('            JOIN suppliers s ON pi.supplier_id = s.id\n')
+    f.write('            LEFT JOIN users u ON pi.created_by = u.id\n')
+    f.write('            ORDER BY pi.invoice_date DESC\n')
+    f.write('            LIMIT 100\n')
+    f.write('        """)\n')

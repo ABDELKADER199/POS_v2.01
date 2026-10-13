@@ -1,0 +1,97 @@
+@use '../products/products.component.scss' as *;
+
+.tabs-container {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #1C2C48;
+  padding-bottom: 12px;
+}
+
+.tab-btn {
+  background: transparent;
+  color: #71819C;
+  border: none;
+  font-size: 16px;
+  font-weight: 800;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.tab-btn:hover {
+  background: rgba(47, 107, 255, 0.05);
+  color: #AAB8D0;
+}
+
+.tab-btn.active {
+  background: rgba(47, 107, 255, 0.15);
+  color: #77B7FF;
+  border: 1px solid #2F6BFF;
+}
+
+.tab-pane {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.stat-card {
+  background: #0F172A;
+  border: 1px solid #263957;
+  border-radius: 12px;
+  padding: 24px;
+  border-right: 5px solid #263957;
+}
+
+.stat-title {
+  color: #AAB8D0;
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.border-success { border-right-color: #17A65A; }
+.border-danger { border-right-color: #E23B3B; }
+.border-warning { border-right-color: #F8B400; }
+.border-info { border-right-color: #2F6BFF; }
+
+.text-success { color: #17A65A; }
+.text-danger { color: #E23B3B; }
+.text-warning { color: #F8B400; }
+.text-info { color: #77B7FF; }
+
+.card-panel {
+  background: #0F172A;
+  border: 1px solid #263957;
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.panel-title {
+  color: #EEF4FF;
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  border-bottom: 1px dashed #263957;
+  padding-bottom: 12px;
+}
+
+.badge-success { background: rgba(23, 166, 90, 0.15); color: #17A65A; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+.badge-danger { background: rgba(226, 59, 59, 0.15); color: #E23B3B; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+.badge-warning { background: rgba(248, 180, 0, 0.15); color: #F8B400; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+.badge-info { background: rgba(47, 107, 255, 0.15); color: #77B7FF; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }

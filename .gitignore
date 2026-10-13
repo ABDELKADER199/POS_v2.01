@@ -1,0 +1,14 @@
+.env
+*.log
+logs/
+backups/
+.tmp/
+.pytest_cache/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+bootdebug_*.txt
+debug_*.txt
+python_run_*.txt

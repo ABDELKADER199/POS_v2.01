@@ -1,0 +1,102 @@
+<div class="dashboard-container">
+  <div class="sidebar">
+    <div class="brand">HyperPOS Admin</div>
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link" routerLink="/admin/categories">📁 تصنيفات الأقسام</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد والتسويات</button>
+    <button class="nav-link active">🛒 المشتريات والموردين</button>
+    <button class="nav-link" routerLink="/admin/users">👥 المستخدمين والصلاحيات</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #17A65A; font-weight: 900;" routerLink="/cashier">🛒 العودة للكاشير</button>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">🛒 فواتير المشتريات (تعلية الأرصدة)</h1>
+    </div>
+
+    <!-- Purchase Form Card -->
+    <div style="background: #0F172A; border: 1px solid #263957; border-radius: 16px; padding: 24px; margin-bottom: 20px;">
+      <div class="form-grid" style="margin-bottom: 20px;">
+        <div class="form-group">
+          <label class="form-label">اختيار المورد</label>
+          <select class="form-select" [(ngModel)]="purchase.supplier_id">
+            <option *ngFor="let s of suppliers" [value]="s.id">{{ s.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">الرقم المرجعي للفاتورة الورقية</label>
+          <input class="form-input" [(ngModel)]="purchase.ref_number" placeholder="اختياري">
+        </div>
+      </div>
+
+      <h3 style="color: #77B7FF; font-weight: 900; margin-bottom: 12px; border-bottom: 1px solid #263957; padding-bottom: 10px;">📋 الأصناف المشتراة</h3>
+      
+      <div style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 2; min-width: 200px;">
+          <label class="form-label">المنتج</label>
+          <select class="form-select" [(ngModel)]="tempItem.product_id">
+            <option *ngFor="let p of products" [value]="p.id">{{ p.product_name }} (كود: {{ p.product_code }})</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex: 1; min-width: 100px;">
+          <label class="form-label">الكمية</label>
+          <input type="number" class="form-input" [(ngModel)]="tempItem.quantity">
+        </div>
+        <div class="form-group" style="flex: 1; min-width: 100px;">
+          <label class="form-label">تكلفة الوحدة</label>
+          <input type="number" class="form-input" [(ngModel)]="tempItem.unit_cost">
+        </div>
+        <button class="btn btn-primary" (click)="addItem()" style="margin-bottom: 0; height: 42px;">➕ إضافة</button>
+      </div>
+
+      <div class="table-container" *ngIf="purchase.items.length > 0" style="margin-bottom: 16px;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>المنتج</th>
+              <th>الكمية</th>
+              <th>تكلفة الوحدة</th>
+              <th>إجمالي الصنف</th>
+              <th style="width: 60px; text-align: center;">حذف</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let it of purchase.items; let i = index">
+              <td style="color: #fff; font-weight: 800;">{{ getProductName(it.product_id) }}</td>
+              <td>{{ it.quantity }}</td>
+              <td>{{ it.unit_cost | number:'1.2-2' }} ج.م</td>
+              <td style="color: #17A65A; font-weight: bold;">{{ it.quantity * it.unit_cost | number:'1.2-2' }} ج.م</td>
+              <td style="text-align: center;">
+                <button class="action-btn del-btn" (click)="removeItem(i)">🗑️</button>
+              </td>
+            </tr>
+            <tr style="border-top: 2px solid #263957;">
+              <td colspan="3" style="color: #fff; font-weight: 900; font-size: 16px;">إجمالي الفاتورة:</td>
+              <td colspan="2" style="color: #E23B3B; font-weight: 900; font-size: 18px;">{{ getTotal() | number:'1.2-2' }} ج.م</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="form-grid" style="margin-bottom: 20px;">
+        <div class="form-group">
+          <label class="form-label">المدفوع نقداً من الخزينة</label>
+          <input type="number" class="form-input" [(ngModel)]="purchase.paid_amount">
+        </div>
+        <div class="form-group">
+          <label class="form-label">طريقة الدفع</label>
+          <select class="form-select" [(ngModel)]="purchase.payment_method">
+            <option value="cash">نقداً (خزينة)</option>
+            <option value="credit">آجل (مديونية للمورد)</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-success" style="width: 100%; padding: 14px; font-size: 16px;" 
+              (click)="submitPurchase()" [disabled]="purchase.items.length === 0">
+        💾 حفظ وترحيل الفاتورة وتعلية المخزون
+      </button>
+    </div>
+  </div>
+</div>

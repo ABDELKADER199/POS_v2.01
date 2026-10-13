@@ -1,0 +1,55 @@
+<div class="login-shell">
+  <div class="brand-panel">
+    <div class="brand-badge">H</div>
+    <h1 class="brand-title">HyperPOS</h1>
+    <p class="brand-subtitle">
+      نظام إدارة نقاط البيع المتكامل لتسريع العمليات، متابعة المخزون، وإدارة المبيعات من شاشة واحدة.
+    </p>
+
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="feature-icon">✓</div>
+        <span>إدارة المبيعات والفواتير</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">✓</div>
+        <span>متابعة المخزون والـ stock</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">✓</div>
+        <span>تقارير وعمليات المراجعة</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-panel">
+    <mat-card class="login-card" appearance="outlined">
+      <div class="card-header">
+        <div class="card-kicker">SECURE ACCESS</div>
+        <h2 class="card-title">تسجيل الدخول</h2>
+      </div>
+
+      <mat-card-content>
+        <form class="form-wrap" (ngSubmit)="submit()">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>البريد الإلكتروني</mat-label>
+            <input matInput type="email" [(ngModel)]="model.email" name="email" required autocomplete="email" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>كلمة المرور</mat-label>
+            <input matInput type="password" [(ngModel)]="model.password" name="password" required autocomplete="current-password" />
+          </mat-form-field>
+
+          <div *ngIf="error" class="error-box">{{ error }}</div>
+
+          <button class="submit-btn" type="submit" [disabled]="loading">
+            {{ loading ? 'جاري تسجيل الدخول...' : 'دخول' }}
+          </button>
+        </form>
+
+        <div class="footer-note">نسخة نظام نقاط البيع • HyperPOS</div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

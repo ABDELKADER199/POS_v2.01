@@ -1,0 +1,186 @@
+<div class="dashboard-container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="brand" style="color: #F8B400;">💰 الإدارة المالية</div>
+    
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد والتسويات</button>
+    <button class="nav-link" routerLink="/admin/purchases">🛒 المشتريات والموردين</button>
+    <button class="nav-link active">🏦 الحسابات والخزينة</button>
+    
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF; font-weight: 900;" routerLink="/cashier">🛒 العودة للكاشير</button>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">🏦 لوحة الحسابات والمالية الشاملة</h1>
+    </div>
+
+    <!-- TABS NAVIGATION -->
+    <div class="tabs-container">
+      <button class="tab-btn" [class.active]="activeTab === 'overview'" (click)="setTab('overview')">📊 نظرة عامة</button>
+      <button class="tab-btn" [class.active]="activeTab === 'treasury'" (click)="setTab('treasury')">💰 حركة الخزينة والتوريد</button>
+      <button class="tab-btn" [class.active]="activeTab === 'expenses'" (click)="setTab('expenses')">📝 المصروفات والتشغيل</button>
+      <button class="tab-btn" [class.active]="activeTab === 'ledger'" (click)="setTab('ledger')">📜 السجل المالي (Ledger)</button>
+    </div>
+
+    <!-- TAB: OVERVIEW -->
+    <div *ngIf="activeTab === 'overview'" class="tab-pane">
+      <div class="overview-grid" *ngIf="summary">
+        <div class="stat-card border-success">
+          <div class="stat-title">السيولة النقدية المتوقعة للخزائن</div>
+          <div class="stat-value text-success">{{summary.treasury_balance | number:'1.2-2'}} ج.م</div>
+        </div>
+        
+        <div class="stat-card border-danger">
+          <div class="stat-title">ديون متأخرة على العملاء</div>
+          <div class="stat-value text-danger">{{summary.customer_debt | number:'1.2-2'}} ج.م</div>
+        </div>
+
+        <div class="stat-card border-warning">
+          <div class="stat-title">مستحقات آجلة للموردين</div>
+          <div class="stat-value text-warning">{{summary.supplier_debt | number:'1.2-2'}} ج.م</div>
+        </div>
+
+        <div class="stat-card" [ngClass]="summary.net_obligation > 0 ? 'border-warning' : 'border-success'">
+          <div class="stat-title">صافي الالتزام المالي</div>
+          <div class="stat-value" [ngClass]="summary.net_obligation > 0 ? 'text-warning' : 'text-success'">
+            {{summary.net_obligation | number:'1.2-2'}} ج.م
+          </div>
+          <div style="font-size: 11px; margin-top: 5px; color: #71819C;">
+            * الموجب يعني ديونك للموردين أكبر من أموالك بالخارج.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: EXPENSES -->
+    <div *ngIf="activeTab === 'expenses'" class="tab-pane">
+      <div class="card-panel">
+        <h3 class="panel-title">➕ تسجيل مصروف منفصل</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">المبلغ المطلوب سحبه</label>
+            <input type="number" class="form-input" [(ngModel)]="expenseForm.amount" placeholder="0.00 ج.م">
+          </div>
+          <div class="form-group">
+            <label class="form-label">بند المصروف</label>
+            <select class="form-select" [(ngModel)]="expenseForm.type">
+              <option value="كهرباء">كهرباء</option>
+              <option value="إيجار">إيجار</option>
+              <option value="رواتب">رواتب وأجور</option>
+              <option value="نثريات">نثريات (شاي/بوفيه)</option>
+              <option value="صيانة">صيانة عامة</option>
+              <option value="بضاعة">مشتريات بضاعة نقدية خارجية</option>
+              <option value="اخرى">اخرى</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label class="form-label">ملاحظات والتفاصيل</label>
+            <input type="text" class="form-input" [(ngModel)]="expenseForm.description" placeholder="اكتب تفاصيل أو سبب المصروف">
+          </div>
+          <div class="form-group" style="grid-column: span 2; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" [(ngModel)]="expenseForm.is_personal" style="width: 20px; height: 20px;">
+            <label class="form-label text-warning" style="margin: 0; font-size: 15px;">مصروف شخصي (مسحوبات الشركاء)</label>
+          </div>
+        </div>
+        <button class="btn btn-danger" style="margin-top: 16px; width: auto; padding: 12px 30px;" (click)="saveExpense()">
+          💾 تسجيل وخصم المصروف من عهدة الخزينة
+        </button>
+      </div>
+
+      <div class="table-container" style="margin-top: 24px;">
+        <h3 class="panel-title" style="margin: 16px;">📑 أحدث المصروفات المسجلة</h3>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>البند</th>
+              <th>التفاصيل</th>
+              <th>القيمة</th>
+              <th>المستخدم</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let ex of expenses">
+              <td style="color: #71819C;">{{ ex.created_at | date:'short' }}</td>
+              <td style="color: #77B7FF; font-weight: bold;">
+                {{ ex.metadata?.type }}
+                <span *ngIf="ex.metadata?.is_personal" class="badge-warning">شخصي</span>
+              </td>
+              <td style="color: #AAB8D0;">{{ ex.description }}</td>
+              <td class="text-danger" style="font-weight: 900;">{{ ex.metadata?.amount | number:'1.2-2' }} ج.م</td>
+              <td>المسؤول ID: {{ ex.user_id }}</td>
+            </tr>
+            <tr *ngIf="expenses.length === 0">
+              <td colspan="5" style="text-align: center; padding: 30px; color: #71819C;">لم يتم تسجيل أي مصروفات.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: TREASURY -->
+    <div *ngIf="activeTab === 'treasury'" class="tab-pane">
+       <div class="card-panel">
+        <h3 class="panel-title">💵 تسجيل تحويل أو حركة للخزينة الأساسية (توريد نقدية / تسوية)</h3>
+        <div class="form-grid">
+          <div class="form-group">
+             <label class="form-label">نوع الحركة</label>
+             <select class="form-select" [(ngModel)]="treasuryForm.type">
+                <option value="In">توريد / إيداع أموال داخل الخزينة (+)</option>
+                <option value="Out">سحب / عجز تسوية من الخزينة (-)</option>
+             </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">المبلغ</label>
+            <input type="number" class="form-input" [(ngModel)]="treasuryForm.amount" placeholder="0.00 ج.م">
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label class="form-label">بيان الحركة (سبب التوريد أو السحب)</label>
+            <input type="text" class="form-input" [(ngModel)]="treasuryForm.description" placeholder="مثال: توريد نقدية مبيعات وردية الصباح إلى الخزينة الرئيسية">
+          </div>
+        </div>
+        <button class="btn" [ngClass]="treasuryForm.type === 'In' ? 'btn-success' : 'btn-danger'" style="margin-top: 16px; width: auto; padding: 12px 30px;" (click)="saveTreasuryMovement()">
+          💰 تنفيذ الحركة وتحديث أرصدة الخزينة
+        </button>
+       </div>
+    </div>
+
+    <!-- TAB: LEDGER -->
+    <div *ngIf="activeTab === 'ledger'" class="tab-pane">
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>العملية (Transaction)</th>
+              <th>الوصف الدفتري</th>
+              <th>المستخدم / المحاسب</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of ledger">
+              <td style="color: #71819C;">{{ row.created_at | date:'short' }}</td>
+              <td>
+                <span *ngIf="row.action_type === 'expense_added'" class="badge-danger">تسجيل مصروف</span>
+                <span *ngIf="row.action_type === 'treasury_in'" class="badge-success">إيداع خزينة</span>
+                <span *ngIf="row.action_type === 'treasury_out'" class="badge-danger">سحب خزينة</span>
+                <span *ngIf="row.action_type === 'sale_completed'" class="badge-info">عملية بيع كاشير</span>
+                <span *ngIf="row.action_type === 'purchase_completed'" class="badge-warning">فاتورة مشتريات</span>
+              </td>
+              <td style="color: #EEF4FF; font-weight: 600;">{{ row.description }}</td>
+              <td style="color: #AAB8D0;">{{ row.user_name || 'System' }}</td>
+            </tr>
+            <tr *ngIf="ledger.length === 0">
+              <td colspan="4" style="text-align: center; padding: 30px; color: #71819C;">السجل المالي فارغ.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>

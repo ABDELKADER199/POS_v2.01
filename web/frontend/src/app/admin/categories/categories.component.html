@@ -1,0 +1,91 @@
+<div class="dashboard-container">
+  <!-- Sidebar Navigation -->
+  <div class="sidebar">
+    <div class="brand">HyperPOS Admin</div>
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link active">📁 تصنيفات الأقسام</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد والتسويات</button>
+    <button class="nav-link" routerLink="/admin/purchases">🛒 المشتريات والموردين</button>
+    <button class="nav-link" routerLink="/admin/users">👥 المستخدمين والصلاحيات</button>
+    
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #17A65A; font-weight: 900;" routerLink="/cashier">🛒 العودة للكاشير</button>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">تصنيفات الأقسام</h1>
+      <button class="btn btn-success" (click)="showModal = true; resetForm()">➕ إضافة قسم جديد</button>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-container">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th style="width: 60px;">#</th>
+            <th>اسم القسم</th>
+            <th>الوصف</th>
+            <th>حالة التفعيل</th>
+            <th style="text-align: center; width: 120px;">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngIf="categories.length === 0">
+            <td colspan="5" style="text-align: center; padding: 30px;">لا توجد أقسام بعد. أضف قسماً جديداً للبدء.</td>
+          </tr>
+          <tr *ngFor="let cat of categories">
+            <td style="color: #71819C;">{{ cat.id }}</td>
+            <td style="color: #fff; font-weight: 800;">{{ cat.category_name }}</td>
+            <td>{{ cat.description || '-' }}</td>
+            <td>
+              <span class="status-badge" [ngClass]="cat.is_active ? 'active-badge' : 'inactive-badge'">
+                {{ cat.is_active ? 'مفعّل' : 'موقوف' }}
+              </span>
+            </td>
+            <td style="text-align: center;">
+              <button class="action-btn edit-btn" title="تعديل" (click)="edit(cat)">✏️</button>
+              <button class="action-btn del-btn" title="حذف" (click)="delete(cat.id)">🗑️</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" *ngIf="showModal">
+  <div class="modal" style="max-width: 480px;">
+    <div class="modal-header">
+      <h2 style="margin: 0; color: #fff;">{{ editingId ? 'تعديل القسم' : 'إضافة قسم جديد' }}</h2>
+      <button class="action-btn del-btn" (click)="showModal = false">✖</button>
+    </div>
+    
+    <form (ngSubmit)="saveCategory()">
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label class="form-label">اسم القسم *</label>
+        <input class="form-input" [(ngModel)]="currentCat.category_name" name="name" required placeholder="مثلاً: مشروبات، ألبان، ...">
+      </div>
+      
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label class="form-label">الوصف (اختياري)</label>
+        <input class="form-input" [(ngModel)]="currentCat.description" name="desc" placeholder="وصف مختصر للقسم">
+      </div>
+      
+      <div class="form-group" style="margin-bottom: 16px;">
+        <label class="form-label">الحالة</label>
+        <select class="form-select" [(ngModel)]="currentCat.is_active" name="active">
+          <option [ngValue]="true">مفعّل (يظهر في البحث)</option>
+          <option [ngValue]="false">موقوف (لا يظهر)</option>
+        </select>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" (click)="showModal = false">تراجع</button>
+        <button type="submit" class="btn btn-success">💾 {{ editingId ? 'حفظ التعديلات' : 'إنشاء القسم' }}</button>
+      </div>
+    </form>
+  </div>
+</div>

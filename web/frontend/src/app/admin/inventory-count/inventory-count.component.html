@@ -1,0 +1,185 @@
+<div class="dashboard-container">
+  <div class="sidebar">
+    <div class="brand" style="color: #F8B400;">📦 جلسات الجرد</div>
+    <button class="nav-link" routerLink="/admin/products">📦 المنتجات</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 التعديل المباشر</button>
+    <button class="nav-link active">📋 جلسات الجرد</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF;" routerLink="/cashier">🛒 الكاشير</button>
+  </div>
+
+  <div class="main-content">
+    
+    <!-- LIST SCREEN -->
+    <ng-container *ngIf="currentScreen === 'list'">
+      <div class="header">
+        <h1 class="page-title">📋 جلسات الجرد الفعلي</h1>
+        <button class="btn btn-success" (click)="openCreateModal()">➕ إنشاء جلسة جرد جديدة</button>
+      </div>
+
+      <div class="toolbar" style="margin-bottom: 20px;">
+        <select class="form-select" [(ngModel)]="storeFilter" (change)="loadSessions()">
+          <option value="">كل الفروع</option>
+          <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+        </select>
+        <select class="form-select" [(ngModel)]="statusFilter" (change)="loadSessions()">
+          <option value="">كل الحالات</option>
+          <option value="open">مفتوح</option>
+          <option value="review">قيد المراجعة</option>
+          <option value="approved">معتمد</option>
+        </select>
+      </div>
+
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>رقم الجلسة</th>
+              <th>الفرع</th>
+              <th>الحالة</th>
+              <th>تاريخ البدء</th>
+              <th>المنشئ</th>
+              <th>إجمالي الأصناف</th>
+              <th>ما تم جرده</th>
+              <th>أصناف بها عجز/زيادة</th>
+              <th>قيمة الفروقات</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let s of sessions">
+              <td style="color: #EEF4FF; font-weight: bold;">{{ s.count_number }}</td>
+              <td style="color: #77B7FF;">{{ s.store_name }}</td>
+              <td>
+                <span class="badge" 
+                      [ngClass]="{'badge-success': s.status === 'approved', 'badge-warning': s.status === 'open' || s.status === 'review'}">
+                  {{ s.status === 'approved' ? 'معتمد' : (s.status === 'review' ? 'قيد المراجعة' : 'مفتوح') }}
+                </span>
+              </td>
+              <td>{{ s.started_at | date:'short' }}</td>
+              <td>{{ s.created_by_name }}</td>
+              <td>{{ s.item_count }}</td>
+              <td style="color: #10B981;">{{ s.counted_count }}</td>
+              <td style="color: #EF4444;">{{ s.variance_count }}</td>
+              <td style="font-weight: bold;" [style.color]="s.variance_value > 0 ? '#10B981' : (s.variance_value < 0 ? '#EF4444' : '#94A3B8')">
+                {{ s.variance_value | number:'1.2-2' }} ج.م
+              </td>
+              <td>
+                <button class="action-btn edit-btn" (click)="openSession(s)" title="فتح الجلسة">
+                  {{ s.status === 'approved' ? '👁️' : '📝' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </ng-container>
+
+
+    <!-- SESSION DETAILS SCREEN -->
+    <ng-container *ngIf="currentScreen === 'session' && activeSession">
+      <div class="header" style="background: #020617; padding: 16px; border-radius: 12px; border: 1px solid #1C2C48;">
+        <div>
+          <h1 class="page-title" style="margin-bottom: 4px;">📝 جرد: {{ activeSession.count_number }}</h1>
+          <p style="color: #94A3B8; font-size: 13px; margin: 0;">الفرع: {{ activeSession.store_name }} | الحالة: {{ activeSession.status }}</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <button class="btn btn-outline" (click)="backToList()">🔙 العودة للقائمة</button>
+          <button class="btn btn-success" *ngIf="activeSession.status !== 'approved'" (click)="approveSession()">✅ اعتماد وتسوية المخزون</button>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-top: 16px; margin-bottom: 20px;">
+        <input type="text" class="form-input" style="flex: 1;" placeholder="بحث بالباركود أو اسم الصنف (اضغط Enter).." [(ngModel)]="searchQuery" (keyup)="searchItems($event)">
+        <button class="btn btn-primary" (click)="loadSessionItems()">🔍 بحث</button>
+      </div>
+
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>الباركود</th>
+              <th>المنتج</th>
+              <th>الرصيد الدفتري</th>
+              <th>الرصيد الفعلي</th>
+              <th>الفرق (Variance)</th>
+              <th>التكلفة (الوحدة)</th>
+              <th>ملاحظات</th>
+              <th *ngIf="activeSession.status !== 'approved'">إجراء</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let i of sessionItems">
+              <td style="color: #77B7FF;">{{ i.barcode }}</td>
+              <td style="color: #EEF4FF; font-weight: bold;">{{ i.product_name }}</td>
+              <td style="color: #AAB8D0;">{{ i.book_quantity }}</td>
+              
+              <!-- Actual Quantity Input -->
+              <td>
+                <input type="number" class="form-input small-input" [(ngModel)]="i.input_quantity" 
+                       [disabled]="activeSession.status === 'approved'"
+                       (keyup.enter)="saveItemCount(i)"
+                       [style.borderColor]="i.actual_quantity !== null ? '#10B981' : '#334155'">
+              </td>
+
+              <!-- Variance Label -->
+              <td style="font-weight: bold;" 
+                  [style.color]="i.variance > 0 ? '#10B981' : (i.variance < 0 ? '#EF4444' : '#94A3B8')">
+                {{ i.variance !== null ? (i.variance > 0 ? '+' + i.variance : i.variance) : '-' }}
+              </td>
+              
+              <td>{{ i.unit_cost }}</td>
+              
+              <!-- Notes Input -->
+              <td>
+                <input type="text" class="form-input small-input" [(ngModel)]="i.notes" 
+                       [disabled]="activeSession.status === 'approved'"
+                       placeholder="...">
+              </td>
+
+              <!-- Save Button -->
+              <td *ngIf="activeSession.status !== 'approved'">
+                <button class="action-btn edit-btn" (click)="saveItemCount(i)" title="حفظ">💾</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </ng-container>
+
+  </div>
+</div>
+
+<!-- CREATE MODAL -->
+<div class="modal-overlay" *ngIf="showCreateModal">
+  <div class="modal-content" style="max-width: 500px;">
+    <h2 class="modal-title">إنشاء جلسة جرد</h2>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>رقم الجلسة</label>
+        <input type="text" class="form-input" [(ngModel)]="newSession.count_number" readonly>
+      </div>
+      <div class="form-group">
+        <label>الفرع</label>
+        <select class="form-select" [(ngModel)]="newSession.store_id">
+          <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>نوع الجرد</label>
+        <select class="form-select" [(ngModel)]="newSession.count_type">
+          <option value="full">جرد شامل</option>
+          <option value="partial">جرد جزئي</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>ملاحظات</label>
+        <textarea class="form-input" style="height: 80px;" [(ngModel)]="newSession.notes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" (click)="showCreateModal = false">إلغاء</button>
+      <button class="btn btn-success" (click)="createSession()">إنشاء وبدء الجرد</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,114 @@
+<div class="dashboard-container">
+  <div class="sidebar">
+    <div class="brand">HyperPOS Admin</div>
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link" routerLink="/admin/categories">📁 تصنيفات الأقسام</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد والتسويات</button>
+    <button class="nav-link" routerLink="/admin/purchases">🛒 المشتريات والموردين</button>
+    <button class="nav-link active">👥 المستخدمين والصلاحيات</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #17A65A; font-weight: 900;" routerLink="/cashier">🛒 العودة للكاشير</button>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">👥 إدارة المستخدمين والصلاحيات</h1>
+      <button class="btn btn-success" (click)="openAddModal()">➕ إضافة مستخدم جديد</button>
+    </div>
+
+    <div class="table-container">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th>الاسم الكامل</th>
+            <th>البريد / اسم الدخول</th>
+            <th>الوظيفة (Role)</th>
+            <th>الحالة</th>
+            <th style="text-align: center; width: 130px;">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngIf="users.length === 0">
+            <td colspan="6" style="text-align: center; padding: 30px;">لا يوجد مستخدمون مسجلون بعد.</td>
+          </tr>
+          <tr *ngFor="let u of users">
+            <td style="color: #71819C;">{{ u.id }}</td>
+            <td style="color: #fff; font-weight: 800;">{{ u.name }}</td>
+            <td>{{ u.email }}</td>
+            <td>
+              <span *ngFor="let r of u.roles" style="background: rgba(47, 107, 255, 0.15); color: #77B7FF; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; margin-left: 4px;">
+                {{ r.name }}
+              </span>
+              <span *ngIf="!u.roles || u.roles.length === 0" style="color: #71819C; font-size: 11px;">بدون وظيفة</span>
+            </td>
+            <td>
+              <span class="status-badge" [ngClass]="u.is_active ? 'active-badge' : 'inactive-badge'">
+                {{ u.is_active ? 'نشط' : 'موقوف' }}
+              </span>
+            </td>
+            <td style="text-align: center;">
+              <button class="action-btn edit-btn" title="تعديل" (click)="edit(u)">✏️</button>
+              <button class="action-btn del-btn" title="إيقاف الحساب" (click)="deleteUser(u.id)" [disabled]="u.id === 1">🗑️</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit User Modal -->
+<div class="modal-overlay" *ngIf="showModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 style="margin: 0; color: #fff;">{{ editingId ? 'تعديل بيانات المستخدم' : 'إنشاء حساب مستخدم جديد' }}</h2>
+      <button class="action-btn del-btn" (click)="showModal = false">✖</button>
+    </div>
+    
+    <form (ngSubmit)="saveUser()">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">الاسم الكامل *</label>
+          <input class="form-input" [(ngModel)]="currentUser.name" name="name" required>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">البريد الإلكتروني / اسم الدخول *</label>
+          <input type="email" class="form-input" [(ngModel)]="currentUser.email" name="email" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">كلمة المرور {{ editingId ? '(اتركها فارغة إذا لم ترد التغيير)' : '*' }}</label>
+          <input type="password" class="form-input" [(ngModel)]="currentUser.password" name="pwd" [required]="!editingId">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">رقم الهاتف</label>
+          <input class="form-input" [(ngModel)]="currentUser.phone" name="phone">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">الوظيفة (الصلاحيات) *</label>
+          <select class="form-select" [(ngModel)]="currentUser.role_name" name="role" required>
+            <option value="" disabled>اختر الوظيفة...</option>
+            <option *ngFor="let r of roles" [value]="r.name">{{ r.name }}</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">حالة الحساب</label>
+          <select class="form-select" [(ngModel)]="currentUser.is_active" name="active">
+            <option [ngValue]="true">نشط (يمكنه الدخول)</option>
+            <option [ngValue]="false">موقوف (ممنوع من الدخول)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" (click)="showModal = false">تراجع</button>
+        <button type="submit" class="btn btn-success">💾 {{ editingId ? 'حفظ التعديلات' : 'إنشاء الحساب' }}</button>
+      </div>
+    </form>
+  </div>
+</div>

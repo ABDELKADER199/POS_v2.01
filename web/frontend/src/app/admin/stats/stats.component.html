@@ -1,0 +1,205 @@
+<div class="dashboard-container">
+  <div class="sidebar">
+    <div class="brand" style="color: #10B981;">📊 لوحة القيادة</div>
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد</button>
+    <button class="nav-link" routerLink="/admin/accounts">🏦 الحسابات</button>
+    <button class="nav-link" routerLink="/admin/promotions">🏷️ العروض</button>
+    <button class="nav-link active">📊 الإحصائيات</button>
+    <button class="nav-link" routerLink="/admin/settings">⚙️ الإعدادات</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF; font-weight: 900;" routerLink="/cashier">🛒 الكاشير</button>
+  </div>
+
+  <div class="main-content">
+    <!-- Header -->
+    <div class="header" style="flex-wrap: wrap; gap: 12px;">
+      <h1 class="page-title" style="flex: 0 0 auto;">📊 لوحة القيادة - Dashboard</h1>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <select class="form-select" [(ngModel)]="storeFilter" (change)="loadDashboard()" style="width: auto; min-width: 150px;">
+          <option value="">الكل</option>
+          <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+        </select>
+        <button class="btn btn-outline" style="padding: 6px 14px;" (click)="setPreset('today')">اليوم</button>
+        <button class="btn btn-outline" style="padding: 6px 14px;" (click)="setPreset('week')">أسبوع</button>
+        <button class="btn btn-outline" style="padding: 6px 14px;" (click)="setPreset('month')">شهر</button>
+        <input type="date" class="form-input" [(ngModel)]="dateFrom" style="width: auto;">
+        <input type="date" class="form-input" [(ngModel)]="dateTo" style="width: auto;">
+        <button class="btn btn-success" style="padding: 6px 20px;" (click)="loadDashboard()">🔄 تحديث</button>
+      </div>
+    </div>
+
+    <!-- Metric Cards Row 1 -->
+    <div class="metrics-grid">
+      <div class="metric-card" style="--accent: #10B981;">
+        <div class="metric-icon">💰</div>
+        <div class="metric-title">إجمالي المبيعات</div>
+        <div class="metric-value" style="color: #10B981;">{{ (metrics.total_sales || 0) | number:'1.2-2' }} ج.م</div>
+      </div>
+      <div class="metric-card" style="--accent: #8B5CF6;">
+        <div class="metric-icon">📈</div>
+        <div class="metric-title">صافي الربح</div>
+        <div class="metric-value" style="color: #8B5CF6;">{{ (metrics.net_profit || 0) | number:'1.2-2' }} ج.م</div>
+      </div>
+      <div class="metric-card" style="--accent: #3B82F6;">
+        <div class="metric-icon">🛍️</div>
+        <div class="metric-title">متوسط البيع (ATV)</div>
+        <div class="metric-value" style="color: #3B82F6;">{{ (metrics.avg_ticket || 0) | number:'1.2-2' }} ج.م</div>
+      </div>
+      <div class="metric-card" style="--accent: #F59E0B;">
+        <div class="metric-icon">📊</div>
+        <div class="metric-title">هامش الربح</div>
+        <div class="metric-value" style="color: #F59E0B;">{{ (metrics.profit_margin || 0) | number:'1.1-1' }}%</div>
+      </div>
+    </div>
+
+    <!-- Metric Cards Row 2 -->
+    <div class="metrics-grid">
+      <div class="metric-card" style="--accent: #06B6D4;">
+        <div class="metric-icon">🧾</div>
+        <div class="metric-title">عدد الفواتير</div>
+        <div class="metric-value" style="color: #06B6D4;">{{ metrics.invoice_count || 0 }}</div>
+      </div>
+      <div class="metric-card" style="--accent: #EF4444;">
+        <div class="metric-icon">↩️</div>
+        <div class="metric-title">المرتجعات</div>
+        <div class="metric-value" style="color: #EF4444;">{{ (metrics.total_returns || 0) | number:'1.2-2' }} ج.م</div>
+      </div>
+      <div class="metric-card" style="--accent: #F43F5E;">
+        <div class="metric-icon">📉</div>
+        <div class="metric-title">معدل الارتجاع</div>
+        <div class="metric-value" style="color: #F43F5E;">{{ (metrics.return_rate || 0) | number:'1.1-1' }}%</div>
+      </div>
+      <div class="metric-card" style="--accent: #6366F1;">
+        <div class="metric-icon">📦</div>
+        <div class="metric-title">تكلفة المخزون</div>
+        <div class="metric-value" style="color: #6366F1;">{{ (metrics.inventory_value || 0) | number:'1.2-2' }} ج.م</div>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-row">
+      <!-- Payment Distribution -->
+      <div class="chart-panel" style="flex: 1;">
+        <h3 class="panel-title">💳 توزيع طرق الدفع</h3>
+        <div class="donut-container">
+          <div *ngFor="let p of paymentChart" class="payment-bar">
+            <div class="payment-label">{{ p.payment_method }}</div>
+            <div class="payment-fill-bg">
+              <div class="payment-fill" [style.width]="barHeight(p.total, paymentTotal)" [style.background]="p.payment_method === 'Cash' ? '#10B981' : '#3B82F6'"></div>
+            </div>
+            <div class="payment-value">{{ p.total | number:'1.0-0' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily Trend -->
+      <div class="chart-panel" style="flex: 2;">
+        <h3 class="panel-title">📈 اتجاه المبيعات اليومية</h3>
+        <div class="bar-chart">
+          <div class="bar-item" *ngFor="let d of dailyChart">
+            <div class="bar-fill" [style.height]="barHeight(d.total, maxDailyValue)" style="background: linear-gradient(to top, #3B82F6, #60A5FA);"></div>
+            <div class="bar-label">{{ d.label }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hourly Sales -->
+      <div class="chart-panel" style="flex: 2;">
+        <h3 class="panel-title">⏰ ذروة المبيعات حسب الساعة</h3>
+        <div class="bar-chart">
+          <div class="bar-item" *ngFor="let h of hourlyChart">
+            <div class="bar-fill" [style.height]="barHeight(h.total, maxHourlyValue)" style="background: linear-gradient(to top, #10B981, #34D399);"></div>
+            <div class="bar-label">{{ h.label }}:00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Branch Performance -->
+    <div class="chart-panel" style="margin-bottom: 24px;">
+      <h3 class="panel-title">🏢 أداء الفروع</h3>
+      <div class="branch-grid">
+        <div class="branch-card" *ngFor="let s of storeSales" [style.borderColor]="s.total_sales > 5000 ? '#10B981' : '#3B82F6'">
+          <div class="branch-name">{{ s.store_name }}</div>
+          <div class="branch-sales" [style.color]="s.total_sales > 5000 ? '#10B981' : '#3B82F6'">{{ s.total_sales | number:'1.0-0' }} ج.م</div>
+          <div class="branch-count">{{ s.invoice_count }} فاتورة</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail Tables -->
+    <div class="tables-grid">
+      <!-- Top Products -->
+      <div class="chart-panel">
+        <h3 class="panel-title">🏆 الأكثر مبيعاً</h3>
+        <table class="admin-table">
+          <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let p of topProducts">
+              <td style="color: #EEF4FF;">{{ p.product_name }}</td>
+              <td style="color: #F8B400; font-weight: bold;">{{ p.total_qty | number:'1.0-0' }}</td>
+              <td style="color: #10B981;">{{ p.total_revenue | number:'1.2-2' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Top Customers -->
+      <div class="chart-panel">
+        <h3 class="panel-title">👥 كبار العملاء</h3>
+        <table class="admin-table">
+          <thead><tr><th>العميل</th><th>الهاتف</th><th>إجمالي الشراء</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let c of topCustomers">
+              <td style="color: #EEF4FF;">{{ c.customer_name }}</td>
+              <td style="color: #77B7FF;">{{ c.customer_phone }}</td>
+              <td style="color: #10B981; font-weight: bold;">{{ c.total_spent | number:'1.2-2' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Most Returned -->
+      <div class="chart-panel">
+        <h3 class="panel-title">↩️ الأكثر ارتجاعاً</h3>
+        <table class="admin-table">
+          <thead><tr><th>المنتج</th><th>الكمية المرتجعة</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let r of mostReturned">
+              <td style="color: #EEF4FF;">{{ r.product }}</td>
+              <td style="color: #EF4444; font-weight: bold;">{{ r.returned_qty | number:'1.0-0' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Supplier Stats -->
+    <div class="chart-panel" style="margin-top: 24px;">
+      <h3 class="panel-title">🤝 إحصائيات الموردين</h3>
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>المورد</th>
+              <th>إجمالي المشتريات</th>
+              <th>المسدد</th>
+              <th>الرصيد</th>
+              <th>عدد الفواتير</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let s of supplierStats">
+              <td style="color: #EEF4FF; font-weight: bold;">{{ s.supplier_name }}</td>
+              <td style="color: #F8B400;">{{ s.total_purchases | number:'1.2-2' }}</td>
+              <td style="color: #10B981;">{{ s.total_paid | number:'1.2-2' }}</td>
+              <td style="color: #EF4444; font-weight: bold;">{{ s.remaining_balance | number:'1.2-2' }}</td>
+              <td>{{ s.invoice_count }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,29 @@
+<div class="cashier-root">
+  <header>
+    <h1>نقطة البيع</h1>
+    <div class="user">
+      <span>{{'مرحبا'}}</span>
+      <button (click)="logout()">خروج</button>
+    </div>
+  </header>
+  <main>
+    <section class="products">
+      <h3>المنتجات</h3>
+      <div *ngFor="let p of products" class="product">
+        <div>{{p.name}}</div>
+        <div>{{p.price}} ج.م</div>
+        <button (click)="add(p)">إضافة</button>
+      </div>
+    </section>
+    <aside class="cart">
+      <h3>السلة</h3>
+      <div *ngFor="let i of cart" class="cart-item">
+        <div>{{i.name}} x {{i.qty}}</div>
+        <div>{{i.price * i.qty}} ج.م</div>
+        <button (click)="remove(i)">إزالة</button>
+      </div>
+      <div class="total">المجموع: {{ total() }} ج.م</div>
+      <button (click)="checkout()" [disabled]="cart.length===0">دفع</button>
+    </aside>
+  </main>
+</div>

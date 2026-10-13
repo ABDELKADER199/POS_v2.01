@@ -1,0 +1,11 @@
+@use '../accounts/accounts.component.scss' as *;
+
+.small-input {
+  max-width: 90px;
+  height: 32px;
+  padding: 4px 8px;
+  font-size: 13px;
+  text-align: center;
+  font-weight: 900;
+  border-width: 2px;
+}

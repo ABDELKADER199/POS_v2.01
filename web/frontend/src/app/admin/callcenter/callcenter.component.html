@@ -1,0 +1,186 @@
+<div class="dashboard-container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="brand" style="color: #FF5A96;">☎️ كول سنتر</div>
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد والتسويات</button>
+    <button class="nav-link" routerLink="/admin/accounts">🏦 الحسابات والخزينة</button>
+    <button class="nav-link active">دعم وطلبات التوصيل</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF; font-weight: 900;" routerLink="/cashier">🛒 العودة للكاشير</button>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">☎️ Call Center Manager - إدارة أوامر التوصيل والدعم</h1>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs-container">
+      <button class="tab-btn" [class.active]="activeTab === 'new_order'" (click)="setTab('new_order')">📝 إنشاء أمر توصيل</button>
+      <button class="tab-btn" [class.active]="activeTab === 'pending'" (click)="setTab('pending')">⏳ الأوامر المعلقة وتحت التجهيز</button>
+      <button class="tab-btn" [class.active]="activeTab === 'completed'" (click)="setTab('completed')">✅ الأوامر المنجزة والمرفوضة</button>
+    </div>
+
+    <!-- TAB: NEW ORDER -->
+    <div *ngIf="activeTab === 'new_order'" class="tab-pane callcenter-grid">
+      
+      <!-- Column 1: Products Search -->
+      <div class="panel">
+        <h3 class="panel-title">🔍 البحث عن منتجات</h3>
+        <input type="text" class="form-input search-input" placeholder="اكتب اسم المنتج، الباركود، أو الوصف السريع..." [(ngModel)]="searchQuery" (keyup)="onSearchInput()">
+        <div class="product-results">
+           <div class="product-card" *ngFor="let p of searchResults" (click)="addToCart(p)">
+              <div class="p-name">{{p.product_name}}</div>
+              <div class="p-price">{{p.sell_price | number:'1.2-2'}} ج.م</div>
+              <div class="p-code">{{p.product_code}}</div>
+           </div>
+           <div *ngIf="searchQuery && searchResults.length === 0" style="padding: 20px; text-align: center; color: #71819C;">
+             لم يتم العثور على أي منتج.
+           </div>
+        </div>
+      </div>
+
+      <!-- Column 2: Cart -->
+      <div class="panel">
+        <h3 class="panel-title">🛒 سلة مشتريات العميل</h3>
+        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>كود</th>
+                <th>الصنف</th>
+                <th>السعر</th>
+                <th style="width: 80px;">الكمية</th>
+                <th style="width: 40px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of cart; let i = index">
+                <td style="color: #AAB8D0; font-size: 11px;">{{ item.code }}</td>
+                <td style="color: #EEF4FF; font-weight: bold;">{{ item.name }}</td>
+                <td style="color: #77B7FF;">{{ item.price | number:'1.2-2' }}</td>
+                <td>
+                  <input type="number" min="1" class="form-input qty-input" [(ngModel)]="item.quantity">
+                </td>
+                <td>
+                  <button class="action-btn del-btn" (click)="removeFromCart(i)">✖</button>
+                </td>
+              </tr>
+              <tr *ngIf="cart.length === 0">
+                <td colspan="5" style="text-align: center; color: #71819C; padding: 30px;">سلّة المشتريات فارغة. اختر من القائمة لإضافتها للطلب.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="total-bar">
+          إجمالي فاتورة العميل: <span>{{ cartTotal | number:'1.2-2' }} ج.م</span>
+        </div>
+      </div>
+
+      <!-- Column 3: Customer Details & Submission -->
+      <div class="panel">
+        <h3 class="panel-title">📋 بيانات المستلم وتوجيه الطلب</h3>
+        <div class="form-group">
+           <label class="form-label">رقم هاتف العميل (أساسي)</label>
+           <input type="text" class="form-input" placeholder="01xxxxxxxxx" [(ngModel)]="customerPhone" (keyup)="onPhoneChange()">
+        </div>
+        <div class="form-group">
+           <label class="form-label">اسم العميل (سيعتمد الاسم المسجل)</label>
+           <input type="text" class="form-input" placeholder="الاسم ثلاثي" [(ngModel)]="customerName">
+        </div>
+        <div class="form-group">
+           <label class="form-label">العنوان التفصيلي للتوصيل</label>
+           <textarea class="form-input" rows="3" placeholder="المحافظة، المنطقة شارع، عمارة..." [(ngModel)]="customerAddress"></textarea>
+        </div>
+        <div class="form-group">
+           <label class="form-label">توجيه الطلب إلى فرع التجهيز (Routing)</label>
+           <select class="form-select" [(ngModel)]="targetStoreId">
+              <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+           </select>
+        </div>
+        
+        <button class="btn btn-success" style="width: 100%; height: 50px; font-size: 16px; margin-top: 15px;" (click)="submitOrder()">
+          ✅ حفظ الأمر وتحويله للتنفيذ الفوري
+        </button>
+      </div>
+
+    </div>
+
+    <!-- TAB: PENDING -->
+    <div *ngIf="activeTab === 'pending'" class="tab-pane">
+      <div class="toolbar" style="margin-bottom: 24px; display: flex; gap: 16px;">
+        <select class="form-input" style="flex: 1;" [(ngModel)]="storeFilter" (change)="loadPending()">
+          <option value="">جميع الفروع المستهدفة</option>
+          <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+        </select>
+        <button class="btn btn-outline" style="width: auto; padding: 10px 20px;" (click)="loadPending()">🔄 تحديث القائمة</button>
+      </div>
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>رقم الأمر</th>
+              <th>العميل</th>
+              <th>الفرع المستهدف</th>
+              <th>الإجمالي</th>
+              <th>حالة الطلب</th>
+              <th>تاريخ الاستلام</th>
+              <th style="min-width: 250px; text-align: center;">لوحة تحكم الحالة (Status Engine)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let o of pendingOrders">
+              <td style="color: #EEF4FF; font-weight: bold;">{{ o.order_number }}</td>
+              <td style="color: #AAB8D0;">{{ o.customer_name }}<br><small style="color:#77B7FF;">{{ o.customer_phone }}</small></td>
+              <td style="color: #F8B400;">{{ o.target_store }}</td>
+              <td style="font-weight: 900;" class="text-success">{{ o.total_amount | number:'1.2-2' }} ج.م</td>
+              <td><span class="badge" [ngClass]="o.status === 'Pending' ? 'badge-primary' : (o.status === 'Accepted' ? 'badge-info' : 'badge-warning')">{{ o.status }}</span></td>
+              <td style="color: #71819C; font-size: 12px;">{{ o.order_date | date:'short' }}</td>
+              <td style="display: flex; gap: 4px; justify-content: center;">
+                <button class="action-btn" style="background: rgba(23,166,90,0.15); color: #17A65A; padding: 4px 10px; font-size: 13px;" (click)="changeStatus(o.id, 'Accepted')">قبول الفرع</button>
+                <button class="action-btn" style="background: rgba(248,180,0,0.15); color: #F8B400; padding: 4px 10px; font-size: 13px;" (click)="changeStatus(o.id, 'Delivered')">مسلّم(مكتمل)</button>
+                <button class="action-btn" style="background: rgba(226,59,59,0.15); color: #E23B3B; padding: 4px 10px; font-size: 13px;" (click)="changeStatus(o.id, 'Cancelled')">إلغاء ورفض</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: COMPLETED -->
+    <div *ngIf="activeTab === 'completed'" class="tab-pane">
+       <div class="toolbar" style="margin-bottom: 24px; display: flex; gap: 16px;">
+        <select class="form-input" style="flex: 1;" [(ngModel)]="storeFilter" (change)="loadCompleted()">
+          <option value="">جميع الفروع المستهدفة</option>
+          <option *ngFor="let s of stores" [value]="s.id">{{ s.store_name }}</option>
+        </select>
+        <button class="btn btn-outline" style="width: auto; padding: 10px 20px;" (click)="loadCompleted()">🔄 رسيفر</button>
+      </div>
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>رقم الأمر</th>
+              <th>العميل</th>
+              <th>الفرع المستهدف</th>
+              <th>الإجمالي</th>
+              <th>حالة الطلب النهائية</th>
+              <th>تاريخ الاستلام</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let o of completedOrders">
+              <td style="color: #EEF4FF; font-weight: bold;">{{ o.order_number }}</td>
+              <td style="color: #AAB8D0;">{{ o.customer_name }}</td>
+              <td style="color: #71819C;">{{ o.target_store }}</td>
+              <td style="font-weight: 900;" class="text-success">{{ o.total_amount | number:'1.2-2' }} ج.م</td>
+              <td><span class="badge" [ngClass]="o.status === 'Cancelled' ? 'badge-danger' : 'badge-success'">{{ o.status === 'Cancelled' ? 'مرفوض/ملغى' : 'تم التسليم بنجاح!' }}</span></td>
+              <td style="color: #71819C; font-size: 12px;">{{ o.order_date | date:'short' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

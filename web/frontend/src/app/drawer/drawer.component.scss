@@ -1,0 +1,114 @@
+.drawer-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #070D1A;
+  direction: rtl;
+  font-family: 'Cairo', 'Tahoma', sans-serif;
+  padding: 20px;
+}
+
+.drawer-card {
+  background: #0F172A;
+  border: 1px solid #263957;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  padding: 32px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.title {
+  color: #77B7FF;
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 24px;
+  font-weight: 900;
+  font-size: 24px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.form-label {
+  color: #AAB8D0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.form-input {
+  background: #101B31;
+  border: 1px solid #263957;
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  outline: none;
+  font-family: inherit;
+  transition: 0.2s;
+  text-align: left;
+}
+
+.form-input:focus {
+  border-color: #2F6BFF;
+}
+
+.summary-box {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid #1C2C48;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.summary-label {
+  color: #71819C;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.summary-value {
+  color: #EEF4FF;
+  font-weight: 900;
+  font-size: 15px;
+}
+
+.divider {
+  border: none;
+  border-top: 1px dashed #263957;
+  margin: 12px 0;
+}
+
+.btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  font-family: inherit;
+  transition: 0.2s;
+  margin-bottom: 12px;
+}
+
+.btn-primary { background: #2F6BFF; color: #fff; }
+.btn-primary:hover { background: #2457D6; }
+
+.btn-danger { background: #E23B3B; color: #fff; }
+.btn-danger:hover { background: #B92828; }
+
+.btn-outline { background: transparent; border: 1px solid #263957; color: #AAB8D0; }
+.btn-outline:hover { background: #1C2C48; color: #EEF4FF; }

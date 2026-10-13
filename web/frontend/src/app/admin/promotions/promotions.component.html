@@ -1,0 +1,171 @@
+<div class="dashboard-container">
+  <div class="sidebar">
+    <div class="brand" style="color: #F8B400;">🏷️ العروض والخصومات</div>
+    <button class="nav-link" routerLink="/admin/products">📦 إدارة المنتجات</button>
+    <button class="nav-link" routerLink="/admin/inventory">📊 الجرد</button>
+    <button class="nav-link" routerLink="/admin/accounts">🏦 الحسابات</button>
+    <button class="nav-link active">🏷️ إدارة العروض</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF; font-weight: 900;" routerLink="/cashier">🛒 العودة للكاشير</button>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <div>
+        <h1 class="page-title">🏷️ إدارة العروض والخصومات</h1>
+        <p style="color: #71819C; font-size: 13px;">إنشاء عروض محددة المدة وتطبيقها على كل المنتجات أو فئة أو منتج</p>
+      </div>
+      <div style="display: flex; gap: 12px;">
+         <button class="btn btn-success" (click)="openModal()">➕ إضافة عرض</button>
+         <button class="btn btn-purple" style="background:#8E2DE2; color:white;">📓 إنشاء مجلة PDF</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" style="margin-bottom: 24px;">
+      <div class="stat-card">
+        <div class="stat-title">إجمالي العروض</div>
+        <div class="stat-value text-info">{{ promotions.length }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">نشط الآن</div>
+        <div class="stat-value text-success">{{ getActiveCount() }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">متوقف / ملغى</div>
+        <div class="stat-value text-danger">{{ getInactiveCount() }}</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="toolbar" style="margin-bottom: 20px;">
+      <input type="text" class="form-input" placeholder="بحث باسم العرض أو المنتج أو الفئة..." [(ngModel)]="searchQuery" (keyup)="applyFilters()" style="flex:2">
+      <select class="form-select" [(ngModel)]="statusFilter" (change)="applyFilters()" style="flex:1">
+          <option value="All">الكل</option>
+          <option value="Active">نشط الآن</option>
+          <option value="Expired">خارج الفترة</option>
+          <option value="Inactive">متوقف</option>
+      </select>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>العرض</th>
+            <th>النوع</th>
+            <th>القيمة</th>
+            <th>يطبق على</th>
+            <th>من</th>
+            <th>إلى</th>
+            <th>التمويل</th>
+            <th>الحالة</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let p of filteredPromotions">
+            <td style="color: #EEF4FF; font-weight: bold;">{{ p.name }}</td>
+            <td style="color: #AAB8D0;">{{ p.promo_type }}</td>
+            <td style="color: #77B7FF; font-weight: bold;">{{ p.value }}</td>
+            <td style="color: #F8B400;">{{ p.apply_to_name }}</td>
+            <td>{{ p.start_date }}</td>
+            <td>{{ p.end_date }}</td>
+            <td>{{ p.funding_source === 'company' ? 'الشركة' : ('مورد: ' + (p.supplier_name || '')) }}</td>
+            <td>
+              <span class="badge" [ngClass]="getStatusClass(p)">{{ getStatusText(p) }}</span>
+            </td>
+            <td>
+               <button class="action-btn edit-btn" (click)="openModal(p)">✏️</button>
+               <button class="action-btn" [class.del-btn]="p.is_active" [class.edit-btn]="!p.is_active" (click)="toggleActive(p.id)">
+                   {{ p.is_active ? '⏸️' : '▶️' }}
+               </button>
+               <button class="action-btn del-btn" (click)="delete(p.id)">🗑️</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" *ngIf="showModal">
+   <div class="modal-content" style="max-width: 700px;">
+       <h2 class="modal-title">{{ isEdit ? 'تعديل عرض' : 'إضافة عرض جديد' }}</h2>
+       <div class="modal-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+           <div class="form-group" style="grid-column: span 2;">
+               <label>اسم العرض</label>
+               <input type="text" class="form-input" [(ngModel)]="promoForm.name">
+           </div>
+           
+           <div class="form-group">
+               <label>نوع العرض</label>
+               <select class="form-select" [(ngModel)]="promoForm.promo_type">
+                   <option value="percentage">خصم نسبة %</option>
+                   <option value="fixed">خصم مبلغ ثابت</option>
+                   <option value="fixed_per_unit">خصم مبلغ لكل وحدة</option>
+                   <option value="buy_x_get_y">اشتر X واحصل على Y</option>
+                   <option value="second_item_percentage">خصم نسبة على القطعة الثانية</option>
+                   <option value="min_qty_discount">خصم حد أدنى كمية</option>
+                   <option value="bundle_price">باقة بسعر خاص</option>
+               </select>
+           </div>
+           <div class="form-group">
+               <label>القيمة</label>
+               <input type="number" class="form-input" [(ngModel)]="promoForm.value">
+           </div>
+
+           <div class="form-group">
+               <label>الحد الأدنى للكمية</label>
+               <input type="number" class="form-input" [(ngModel)]="promoForm.min_quantity">
+           </div>
+           <div class="form-group">
+               <label>كمية الشراء (لعروض x+y)</label>
+               <input type="number" class="form-input" [(ngModel)]="promoForm.buy_quantity" [disabled]="promoForm.promo_type !== 'buy_x_get_y'">
+           </div>
+
+           <div class="form-group">
+               <label>من</label>
+               <input type="date" class="form-input" [(ngModel)]="promoForm.start_date">
+           </div>
+           <div class="form-group">
+               <label>إلى</label>
+               <input type="date" class="form-input" [(ngModel)]="promoForm.end_date">
+           </div>
+
+           <div class="form-group">
+               <label>تطبيق على</label>
+               <select class="form-select" [(ngModel)]="promoForm.apply_to">
+                   <option value="all">كل المنتجات</option>
+                   <option value="category">فئة محددة</option>
+                   <option value="product">منتج محدد</option>
+               </select>
+           </div>
+           <div class="form-group">
+               <label>الهدف (الفئة/المنتج)</label>
+               <ng-container *ngIf="promoForm.apply_to === 'category'">
+                   <select class="form-select" [(ngModel)]="promoForm.apply_to_id">
+                       <option *ngFor="let c of categories" [value]="c.id">{{ c.category_name }}</option>
+                   </select>
+               </ng-container>
+               <ng-container *ngIf="promoForm.apply_to === 'product'">
+                   <input type="text" class="form-input" placeholder="بحث عن منتج..." (keyup)="searchPromoTarget($event)" style="margin-bottom: 8px;">
+                   <select class="form-select" [(ngModel)]="promoForm.apply_to_id">
+                       <option *ngFor="let tp of targetProducts" [value]="tp.id">{{ tp.product_name }} - {{tp.sell_price}} ج.م</option>
+                       <option *ngIf="isEdit && promoForm.apply_to_id && targetProducts.length === 0" [value]="promoForm.apply_to_id">{{promoForm.apply_to_name}}</option>
+                   </select>
+               </ng-container>
+               <ng-container *ngIf="promoForm.apply_to === 'all'">
+                   <input type="text" class="form-input" disabled value="الكل مسجل تلقائياً">
+               </ng-container>
+           </div>
+       </div>
+       <div class="modal-footer">
+           <button class="btn btn-outline" (click)="showModal = false">إلغاء</button>
+           <button class="btn btn-success" (click)="savePromotion()">حفظ العرض</button>
+       </div>
+   </div>
+</div>

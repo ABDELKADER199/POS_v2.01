@@ -1,0 +1,51 @@
+<div class="dashboard-container">
+  <div class="sidebar">
+    <div class="brand" style="color: #AAB8D0;">⚙️ الإعدادات</div>
+    <button class="nav-link" routerLink="/admin/products">📦 المنتجات</button>
+    <button class="nav-link" routerLink="/admin/stats">📊 الإحصائيات</button>
+    <button class="nav-link" routerLink="/admin/accounts">🏦 الحسابات</button>
+    <button class="nav-link active">⚙️ الإعدادات</button>
+    <div style="flex:1"></div>
+    <button class="nav-link" style="color: #77B7FF;" routerLink="/cashier">🛒 الكاشير</button>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <h1 class="page-title">⚙️ إعدادات النظام</h1>
+    </div>
+
+    <div class="settings-card">
+      <h2 class="card-title">📋 معلومات المتجر</h2>
+      
+      <div class="form-group">
+        <label class="form-label">اسم المتجر</label>
+        <input type="text" class="form-input" [(ngModel)]="settings.store_name" placeholder="مثال: هايبر ماركت القاهرة">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">رقم الهاتف</label>
+          <input type="text" class="form-input" [(ngModel)]="settings.store_phone" placeholder="01xxxxxxxxx">
+        </div>
+        <div class="form-group">
+          <label class="form-label">الرقم الضريبي</label>
+          <input type="text" class="form-input" [(ngModel)]="settings.tax_number" placeholder="xxx-xxx-xxx">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">عنوان المتجر</label>
+        <input type="text" class="form-input" [(ngModel)]="settings.store_address" placeholder="المحافظة، المنطقة، الشارع...">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">تذييل الإيصال (Footer)</label>
+        <input type="text" class="form-input" [(ngModel)]="settings.receipt_footer" placeholder="شكراً لزيارتكم...">
+      </div>
+
+      <button class="btn btn-success save-btn" [disabled]="saving" (click)="save()">
+        {{ saving ? '⏳ جارٍ الحفظ...' : '💾 حفظ الإعدادات' }}
+      </button>
+    </div>
+  </div>
+</div>
