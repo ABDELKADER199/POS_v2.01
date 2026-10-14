@@ -483,6 +483,7 @@ class AccountsView(QWidget):
         def _populate_products(search_term=""):
             nonlocal _all_products_cache
             discount_pct = percent.value()
+            products_list.blockSignals(True)
             products_list.clear()
             _all_products_cache.clear()
 
@@ -496,7 +497,6 @@ class AccountsView(QWidget):
                     if float(p.get("sell_price") or 0) > float(p.get("buy_price") or 0) > 0
                 ]
 
-            checked_count = 0
             for product in products:
                 pid = product.get("id")
                 sell = float(product.get("sell_price") or 0)
@@ -505,8 +505,11 @@ class AccountsView(QWidget):
                 if sell <= 0 or buy <= 0 or sell <= buy:
                     continue
 
-                profit_pct = ((sell - buy) / sell) * 100
-                after_discount_price = sell * (1 - discount_pct / 100)
+                after_discount_price = round(sell * (1.0 - (discount_pct / 100.0)), 2)
+                profit_le = round(after_discount_price - buy, 2)
+                if profit_le <= 0:
+                    continue
+
                 remaining_margin = ((after_discount_price - buy) / sell) * 100 if sell > 0 else 0
 
                 # Color code based on remaining margin after discount
@@ -520,10 +523,12 @@ class AccountsView(QWidget):
                     margin_color = "#dc2626"  # red — risky
                     margin_icon = "🔴"
 
+                code_str = f"[{product.get('product_code')}] " if product.get("product_code") else ""
                 label = (
-                    f"{product.get('product_name', '')}  |  "
-                    f"شراء: {buy:.2f}  |  بيع: {sell:.2f}  |  "
-                    f"{margin_icon} هامش بعد الخصم: {remaining_margin:.1f}%"
+                    f"{code_str}{product.get('product_name', '')}  │  "
+                    f"شراء: {buy:,.2f}  │  بيع: {sell:,.2f}  │  "
+                    f"بعد الخصم: {after_discount_price:,.2f}  │  "
+                    f"{margin_icon} ربح: {profit_le:,.2f} ج.م ({remaining_margin:.1f}%)"
                 )
 
                 product_item = QListWidgetItem(label)
@@ -535,16 +540,16 @@ class AccountsView(QWidget):
                 product_item.setCheckState(
                     Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked
                 )
-                if is_checked:
-                    checked_count += 1
 
                 product_item.setForeground(QColor(margin_color))
                 products_list.addItem(product_item)
                 _all_products_cache[pid] = product_item
 
+            products_list.blockSignals(False)
+
             total = products_list.count()
             products_count_label.setText(
-                f"📦 {total} منتج مؤهل  |  ✅ {checked_count} محدد"
+                f"📦 {total} منتج معروض  │  ✅ {len(selected_ids)} محدد إجمالاً"
             )
 
         def _on_item_changed(item):
@@ -553,31 +558,30 @@ class AccountsView(QWidget):
                 selected_ids.add(pid)
             else:
                 selected_ids.discard(pid)
-            # Update counter
-            checked = sum(
-                1 for i in range(products_list.count())
-                if products_list.item(i).checkState() == Qt.CheckState.Checked
-            )
             products_count_label.setText(
-                f"📦 {products_list.count()} منتج مؤهل  |  ✅ {checked} محدد"
+                f"📦 {products_list.count()} منتج معروض  │  ✅ {len(selected_ids)} محدد إجمالاً"
             )
 
         def _select_all():
+            products_list.blockSignals(True)
             for i in range(products_list.count()):
                 item = products_list.item(i)
                 item.setCheckState(Qt.CheckState.Checked)
                 selected_ids.add(item.data(Qt.ItemDataRole.UserRole))
+            products_list.blockSignals(False)
             products_count_label.setText(
-                f"📦 {products_list.count()} منتج مؤهل  |  ✅ {products_list.count()} محدد"
+                f"📦 {products_list.count()} منتج معروض  │  ✅ {len(selected_ids)} محدد إجمالاً"
             )
 
         def _deselect_all():
+            products_list.blockSignals(True)
             for i in range(products_list.count()):
                 item = products_list.item(i)
                 item.setCheckState(Qt.CheckState.Unchecked)
                 selected_ids.discard(item.data(Qt.ItemDataRole.UserRole))
+            products_list.blockSignals(False)
             products_count_label.setText(
-                f"📦 {products_list.count()} منتج مؤهل  |  ✅ 0 محدد"
+                f"📦 {products_list.count()} منتج معروض  │  ✅ {len(selected_ids)} محدد إجمالاً"
             )
 
         # Debounced search
@@ -600,7 +604,7 @@ class AccountsView(QWidget):
         buttons, save_btn, cancel_btn = action_row()
         save_btn.clicked.connect(
             lambda: self._save_discount_company(
-                dialog, company, name, percent, active, products_list
+                dialog, company, name, percent, active, selected_ids
             )
         )
         cancel_btn.clicked.connect(dialog.reject)
@@ -608,13 +612,19 @@ class AccountsView(QWidget):
         dialog.exec()
 
     def _save_discount_company(
-        self, dialog, company, name, percent, active, products_list
+        self, dialog, company, name, percent, active, selected_items
     ):
-        product_ids = [
-            products_list.item(index).data(Qt.ItemDataRole.UserRole)
-            for index in range(products_list.count())
-            if products_list.item(index).checkState() == Qt.CheckState.Checked
-        ]
+        if isinstance(selected_items, (set, list, tuple)):
+            product_ids = sorted(int(pid) for pid in selected_items if pid)
+        elif hasattr(selected_items, "count"):
+            product_ids = [
+                selected_items.item(index).data(Qt.ItemDataRole.UserRole)
+                for index in range(selected_items.count())
+                if selected_items.item(index).checkState() == Qt.CheckState.Checked
+            ]
+        else:
+            product_ids = []
+
         if company:
             ok = self.ctrl.update_discount_company(
                 company["id"],

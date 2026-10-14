@@ -10,6 +10,7 @@ from application.use_cases.accounts import (
     VOID_EXPENSE_ACTION,
     AccountsQueryUseCase,
     CreatePromotionsCatalogUseCase,
+    DiscountCompaniesUseCase,
     ExpenseUseCase,
     PromotionsUseCase,
     RecordAccountPaymentUseCase,
@@ -197,6 +198,32 @@ class FakeAccountsRepository:
 
     def delete_promotion_record(self, promo_id):
         self.calls.append(("delete_promotion_record", promo_id))
+
+    def search_discount_eligible_products(self, term="", min_margin_percent=0.0):
+        self.calls.append(("search_discount_eligible_products", term, min_margin_percent))
+        return [
+            p for p in getattr(self, "eligible_products", [])
+            if (not term or term.lower() in p.get("product_name", "").lower())
+            and p.get("profit_percent", 0) > min_margin_percent
+        ]
+
+    def get_discount_companies(self, active_only=False):
+        self.calls.append(("get_discount_companies", active_only))
+        return getattr(self, "discount_companies", [{"id": 1, "name": "Company A"}])
+
+    def get_discount_company_products(self, company_id):
+        self.calls.append(("get_discount_company_products", company_id))
+        return getattr(self, "discount_company_products", [10, 20])
+
+    def insert_discount_company(self, name, discount_percent, product_ids=None):
+        self.calls.append(("insert_discount_company", name, discount_percent, product_ids))
+        return 1
+
+    def update_discount_company(self, company_id, fields, product_ids=None):
+        self.calls.append(("update_discount_company", company_id, fields, product_ids))
+
+    def delete_discount_company(self, company_id):
+        self.calls.append(("delete_discount_company", company_id))
 
     def commit(self):
         self.calls.append(("commit",))
@@ -452,3 +479,64 @@ def test_promotions_catalog_returns_result_none_or_reraises_business_error():
 
     with pytest.raises(PromotionCatalogError):
         CreatePromotionsCatalogUseCase(FakeCatalogService(error=PromotionCatalogError("لا توجد عروض"))).execute()
+
+
+def test_discount_companies_search_eligible_products_filters_by_margin_and_term():
+    repo = FakeAccountsRepository()
+    repo.eligible_products = [
+        {"id": 1, "product_name": "منتج ربح عالي", "sell_price": 100, "buy_price": 70, "profit_percent": 30.0},
+        {"id": 2, "product_name": "منتج ربح ضئيل", "sell_price": 100, "buy_price": 95, "profit_percent": 5.0},
+        {"id": 3, "product_name": "شيبسي عالي", "sell_price": 50, "buy_price": 35, "profit_percent": 30.0},
+    ]
+    use_case = DiscountCompaniesUseCase(repo)
+
+    # When discount is 10%, product with 5% margin is excluded
+    results = use_case.search_eligible_products(term="", min_margin_percent=10.0)
+    assert len(results) == 2
+    assert {r["id"] for r in results} == {1, 3}
+
+    # Search term filter
+    results_chips = use_case.search_eligible_products(term="شيبسي", min_margin_percent=10.0)
+    assert len(results_chips) == 1
+    assert results_chips[0]["id"] == 3
+
+
+def test_discount_companies_crud_validation_and_transaction_boundaries():
+    repo = FakeAccountsRepository()
+    use_case = DiscountCompaniesUseCase(repo)
+
+    # Validation: empty name rejected
+    assert use_case.add(name="", discount_percent=10.0) is False
+    assert repo.rolled_back is True
+    assert "اسم شركة الخصم مطلوب" in use_case.last_error
+
+    # Validation: invalid percentage rejected
+    repo.rolled_back = False
+    assert use_case.add(name="شركة", discount_percent=0) is False
+    assert repo.rolled_back is True
+
+    repo.rolled_back = False
+    assert use_case.add(name="شركة", discount_percent=105) is False
+    assert repo.rolled_back is True
+
+    # Valid add
+    repo.committed = False
+    assert use_case.add(name="شركة الأمل", discount_percent=15.0, product_ids=[1, 2]) is True
+    assert repo.committed is True
+    assert ("insert_discount_company", "شركة الأمل", 15.0, [1, 2]) in repo.calls
+
+    # Valid update
+    repo.committed = False
+    assert use_case.update(1, name="شركة النور", discount_percent=10.0, is_active=True, product_ids=[1]) is True
+    assert repo.committed is True
+
+    # Valid delete
+    repo.committed = False
+    assert use_case.delete(1) is True
+    assert repo.committed is True
+    assert ("delete_discount_company", 1) in repo.calls
+
+    # List enriches product_ids
+    listing = use_case.list()
+    assert len(listing) == 1
+    assert listing[0]["product_ids"] == [10, 20]
