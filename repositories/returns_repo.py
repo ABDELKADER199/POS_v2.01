@@ -31,13 +31,9 @@ class ReturnsRepository(BaseRepository):
     def get_invoice_items(self, invoice_id: int) -> List[Dict]:
         """جلب أصناف الفاتورة مع تتبع دقيق على مستوى السطر (invoice_item_id) ومعالجة المرتجعات التاريخية"""
         query = """
-            SELECT ii.id as invoice_item_id, ii.id, ii.product_id, p.product_name,
+            SELECT ii.*, ii.id as invoice_item_id, p.product_name,
                    COALESCE(p.product_code, '') as product_code,
-                   ii.quantity, ii.unit_price, COALESCE(ii.discount, 0) as discount,
-                   ii.total_price,
-                   COALESCE(ii.buy_price, p.buy_price, 0) as buy_price,
-                   COALESCE(ii.item_subtotal, ii.total_price) as item_subtotal,
-                   COALESCE(ii.item_tax, 0) as item_tax,
+                   COALESCE(p.buy_price, 0) as fallback_buy_price,
                    COALESCE((
                        SELECT SUM(ri.quantity)
                        FROM return_items ri JOIN sales_returns sr ON ri.return_id = sr.id
@@ -64,13 +60,9 @@ class ReturnsRepository(BaseRepository):
         except Exception as exc:
             if "invoice_item_id" in str(exc).lower():
                 fallback_query = """
-                SELECT ii.id as invoice_item_id, ii.id, ii.product_id, p.product_name,
+                SELECT ii.*, ii.id as invoice_item_id, p.product_name,
                        COALESCE(p.product_code, '') as product_code,
-                       ii.quantity, ii.unit_price, COALESCE(ii.discount, 0) as discount,
-                       ii.total_price,
-                       COALESCE(ii.buy_price, p.buy_price, 0) as buy_price,
-                       COALESCE(ii.item_subtotal, ii.total_price) as item_subtotal,
-                       COALESCE(ii.item_tax, 0) as item_tax,
+                       COALESCE(p.buy_price, 0) as fallback_buy_price,
                        0 as line_returned_quantity,
                        0 as line_returned_amount,
                        COALESCE((
@@ -93,6 +85,12 @@ class ReturnsRepository(BaseRepository):
         prod_counts = Counter(int(r["product_id"]) for r in rows)
         for r in rows:
             pid = int(r["product_id"])
+            if not r.get("buy_price"):
+                r["buy_price"] = float(r.get("fallback_buy_price") or 0)
+            if "item_subtotal" not in r or r["item_subtotal"] is None:
+                r["item_subtotal"] = float(r.get("total_price") or 0)
+            if "item_tax" not in r or r["item_tax"] is None:
+                r["item_tax"] = 0.0
             line_ret = float(r.get("line_returned_quantity") or 0)
             legacy_ret = float(r.get("legacy_unassigned_returned_quantity") or 0)
             r["line_returned_amount"] = float(r.get("line_returned_amount") or 0)
