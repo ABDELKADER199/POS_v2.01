@@ -821,3 +821,7 @@ class DiscountCompaniesUseCase:
             self.last_error = str(exc)
             self.repo.rollback()
             return False
+
+    def search_eligible_products(self, term="", min_margin_percent=0.0):
+        """بحث عن المنتجات المؤهلة للخصم (التي يوجد فارق ربح بين سعر الشراء والبيع)."""
+        return self.repo.search_discount_eligible_products(term, min_margin_percent)

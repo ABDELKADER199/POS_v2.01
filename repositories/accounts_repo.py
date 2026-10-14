@@ -878,7 +878,8 @@ class AccountsRepository(BaseRepository):
             like = f"%{term or ''}%"
             return self._fetch_all(
                 """
-                SELECT id, product_code, product_name, barcode, sell_price
+                SELECT id, product_code, product_name, barcode, sell_price,
+                       COALESCE(buy_price, 0) as buy_price
                 FROM products
                 WHERE is_active = TRUE
                   AND (%s = '%%' OR product_name LIKE %s OR product_code LIKE %s OR barcode LIKE %s)
@@ -889,6 +890,39 @@ class AccountsRepository(BaseRepository):
             )
         except Exception as e:
             logger.error(f"Error fetching promotion products: {e}")
+            return []
+
+    def search_discount_eligible_products(self, term: str = "", min_margin_percent: float = 0.0) -> List[Dict]:
+        """جلب المنتجات التي سعر بيعها أعلى من سعر شرائها فقط (يوجد هامش ربح).
+        يُستخدم في حوار خصومات الشركات لمنع اختيار منتجات بدون هامش ربح.
+        min_margin_percent: الحد الأدنى لنسبة هامش الربح المطلوبة (مثلاً 5.0 = 5%)
+        """
+        try:
+            like = f"%{term or ''}%"
+            min_margin = max(0.0, float(min_margin_percent or 0)) / 100.0
+            return self._fetch_all(
+                """
+                SELECT id, product_code, product_name, barcode,
+                       sell_price, COALESCE(buy_price, 0) as buy_price,
+                       ROUND(sell_price - COALESCE(buy_price, 0), 2) as profit_amount,
+                       CASE WHEN sell_price > 0
+                            THEN ROUND(((sell_price - COALESCE(buy_price, 0)) / sell_price) * 100, 1)
+                            ELSE 0
+                       END as profit_percent
+                FROM products
+                WHERE is_active = TRUE
+                  AND sell_price > 0
+                  AND COALESCE(buy_price, 0) > 0
+                  AND sell_price > COALESCE(buy_price, 0)
+                  AND ((sell_price - COALESCE(buy_price, 0)) / sell_price) > %s
+                  AND (%s = '%%' OR product_name LIKE %s OR product_code LIKE %s OR barcode LIKE %s)
+                ORDER BY product_name
+                LIMIT 500
+            """,
+                (min_margin, like, like, like, like),
+            )
+        except Exception as e:
+            logger.error(f"Error fetching discount eligible products: {e}")
             return []
 
     def get_all_promotions(self) -> List[Dict]:

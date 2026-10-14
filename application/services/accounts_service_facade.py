@@ -158,6 +158,9 @@ class AccountsServiceFacade:
     def get_last_discount_company_error(self):
         return self.discount_companies_use_case.last_error
 
+    def search_discount_eligible_products(self, term="", min_margin_percent=0.0):
+        return self.discount_companies_use_case.search_eligible_products(term, min_margin_percent)
+
     # ── PDF Reports ────────────────────────────────────
 
     def create_customer_account_pdf(

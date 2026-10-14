@@ -130,6 +130,10 @@ class AccountsRepositoryPort(Protocol):
 
     def delete_discount_company(self, company_id: int) -> None: ...
 
+    def search_discount_eligible_products(
+        self, term: str = "", min_margin_percent: float = 0.0
+    ) -> List[Dict]: ...
+
 
 class PromotionCatalogPort(Protocol):
     def create_pdf(self, download_missing_images=True, refresh_images=True): ...

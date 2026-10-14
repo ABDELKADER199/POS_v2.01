@@ -1,0 +1,1 @@
+{"enabled_features": ["cashier"], "enabled_permissions": ["drawer.open"], "role_permissions": {"1": ["drawer.open", "admin.manage_users"]}}

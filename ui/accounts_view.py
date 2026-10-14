@@ -30,8 +30,8 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
 )
-from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QDate, QTimer
+from PyQt6.QtGui import QFont, QColor
 from ui.styles import (
     GLOBAL_STYLE,
     get_button_style,
@@ -389,36 +389,214 @@ class AccountsView(QWidget):
     def _discount_company_dialog(self, company=None):
         dialog = QDialog(self)
         dialog.setWindowTitle("تعديل شركة خصم" if company else "إضافة شركة خصم")
+        dialog.setMinimumSize(700, 620)
         dialog.setStyleSheet(GLOBAL_STYLE)
-        layout = QFormLayout(dialog)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        # ─── Company Info Section ───
+        info_group = QGroupBox("بيانات الشركة")
+        info_group.setStyleSheet(GROUP_BOX_STYLE)
+        info_form = QFormLayout(info_group)
         name = QLineEdit(company.get("name", "") if company else "")
+        name.setStyleSheet(INPUT_STYLE)
+        name.setPlaceholderText("اسم شركة الخصم")
         percent = QDoubleSpinBox()
         percent.setRange(0.01, 100)
         percent.setDecimals(2)
+        percent.setSuffix(" %")
+        percent.setStyleSheet(INPUT_STYLE)
         percent.setValue(float(company.get("discount_percent", 0) if company else 0))
         active = QCheckBox("نشطة في الكاشير")
         active.setChecked(bool(company.get("is_active", True) if company else True))
+        info_form.addRow("اسم الشركة:", name)
+        info_form.addRow("نسبة الخصم:", percent)
+        info_form.addRow(active)
+        layout.addWidget(info_group)
+
+        # ─── Products Section ───
+        products_group = QGroupBox("الأصناف المستهدفة بالخصم")
+        products_group.setStyleSheet(GROUP_BOX_STYLE)
+        products_layout = QVBoxLayout(products_group)
+        products_layout.setSpacing(8)
+
+        # Search bar
+        search_row = QHBoxLayout()
+        product_search = QLineEdit()
+        product_search.setPlaceholderText("🔍 بحث باسم المنتج أو الباركود...")
+        product_search.setStyleSheet(INPUT_STYLE)
+        search_row.addWidget(product_search)
+        products_layout.addLayout(search_row)
+
+        # Info label
+        info_label = QLabel(
+            "⚠️ تظهر فقط المنتجات التي سعر بيعها أعلى من سعر شرائها — "
+            "المنتجات ذات هامش الربح الكافي بعد تطبيق نسبة الخصم."
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet(
+            f"color: {COLORS['text_secondary']}; font-size: 11px; padding: 4px 8px; "
+            f"background: {COLORS['bg_panel']}; border-radius: 6px;"
+        )
+        products_layout.addWidget(info_label)
+
+        # Products list
         products_list = QListWidget()
         products_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        products_list.setStyleSheet(
+            f"QListWidget {{ font-size: 12px; }} "
+            f"QListWidget::item {{ padding: 5px 8px; border-bottom: 1px solid {COLORS['border']}; }}"
+        )
+        products_layout.addWidget(products_list, 1)
+
+        # Status bar
+        status_bar = QHBoxLayout()
+        products_count_label = QLabel("")
+        products_count_label.setStyleSheet(
+            f"color: {COLORS['text_secondary']}; font-size: 11px; font-weight: 600;"
+        )
+        select_all_btn = QPushButton("تحديد الكل")
+        select_all_btn.setFixedHeight(28)
+        select_all_btn.setStyleSheet(
+            f"background: {COLORS['info']}; color: {COLORS['text_on_brand']}; "
+            "border: none; border-radius: 6px; padding: 2px 12px; font-weight: 600; font-size: 11px;"
+        )
+        deselect_all_btn = QPushButton("إلغاء الكل")
+        deselect_all_btn.setFixedHeight(28)
+        deselect_all_btn.setStyleSheet(
+            f"background: {COLORS['border']}; color: {COLORS['text_primary']}; "
+            "border: none; border-radius: 6px; padding: 2px 12px; font-weight: 600; font-size: 11px;"
+        )
+        status_bar.addWidget(products_count_label)
+        status_bar.addStretch()
+        status_bar.addWidget(select_all_btn)
+        status_bar.addWidget(deselect_all_btn)
+        products_layout.addLayout(status_bar)
+
+        layout.addWidget(products_group, 1)
+
+        # ─── Populate & Filter Logic ───
         selected_ids = set(company.get("product_ids", []) if company else [])
-        for product in self.ctrl.search_promotion_products(""):
-            product_item = QListWidgetItem(
-                f"{product.get('product_name', '')} - {product.get('barcode') or product.get('product_code') or product.get('id')}"
+        _all_products_cache = {}
+
+        def _populate_products(search_term=""):
+            nonlocal _all_products_cache
+            discount_pct = percent.value()
+            products_list.clear()
+            _all_products_cache.clear()
+
+            try:
+                products = self.ctrl.search_discount_eligible_products(
+                    search_term, min_margin_percent=discount_pct
+                )
+            except Exception:
+                products = [
+                    p for p in self.ctrl.search_promotion_products(search_term)
+                    if float(p.get("sell_price") or 0) > float(p.get("buy_price") or 0) > 0
+                ]
+
+            checked_count = 0
+            for product in products:
+                pid = product.get("id")
+                sell = float(product.get("sell_price") or 0)
+                buy = float(product.get("buy_price") or 0)
+
+                if sell <= 0 or buy <= 0 or sell <= buy:
+                    continue
+
+                profit_pct = ((sell - buy) / sell) * 100
+                after_discount_price = sell * (1 - discount_pct / 100)
+                remaining_margin = ((after_discount_price - buy) / sell) * 100 if sell > 0 else 0
+
+                # Color code based on remaining margin after discount
+                if remaining_margin >= 10:
+                    margin_color = "#16a34a"  # green — safe
+                    margin_icon = "🟢"
+                elif remaining_margin >= 3:
+                    margin_color = "#d97706"  # orange — thin margin
+                    margin_icon = "🟡"
+                else:
+                    margin_color = "#dc2626"  # red — risky
+                    margin_icon = "🔴"
+
+                label = (
+                    f"{product.get('product_name', '')}  |  "
+                    f"شراء: {buy:.2f}  |  بيع: {sell:.2f}  |  "
+                    f"{margin_icon} هامش بعد الخصم: {remaining_margin:.1f}%"
+                )
+
+                product_item = QListWidgetItem(label)
+                product_item.setData(Qt.ItemDataRole.UserRole, pid)
+                product_item.setFlags(
+                    product_item.flags() | Qt.ItemFlag.ItemIsUserCheckable
+                )
+                is_checked = pid in selected_ids
+                product_item.setCheckState(
+                    Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked
+                )
+                if is_checked:
+                    checked_count += 1
+
+                product_item.setForeground(QColor(margin_color))
+                products_list.addItem(product_item)
+                _all_products_cache[pid] = product_item
+
+            total = products_list.count()
+            products_count_label.setText(
+                f"📦 {total} منتج مؤهل  |  ✅ {checked_count} محدد"
             )
-            product_item.setData(Qt.ItemDataRole.UserRole, product.get("id"))
-            product_item.setFlags(
-                product_item.flags() | Qt.ItemFlag.ItemIsUserCheckable
+
+        def _on_item_changed(item):
+            pid = item.data(Qt.ItemDataRole.UserRole)
+            if item.checkState() == Qt.CheckState.Checked:
+                selected_ids.add(pid)
+            else:
+                selected_ids.discard(pid)
+            # Update counter
+            checked = sum(
+                1 for i in range(products_list.count())
+                if products_list.item(i).checkState() == Qt.CheckState.Checked
             )
-            product_item.setCheckState(
-                Qt.CheckState.Checked
-                if product.get("id") in selected_ids
-                else Qt.CheckState.Unchecked
+            products_count_label.setText(
+                f"📦 {products_list.count()} منتج مؤهل  |  ✅ {checked} محدد"
             )
-            products_list.addItem(product_item)
-        layout.addRow("اسم الشركة:", name)
-        layout.addRow("نسبة الخصم:", percent)
-        layout.addRow(active)
-        layout.addRow("الأصناف المستهدفة:", products_list)
+
+        def _select_all():
+            for i in range(products_list.count()):
+                item = products_list.item(i)
+                item.setCheckState(Qt.CheckState.Checked)
+                selected_ids.add(item.data(Qt.ItemDataRole.UserRole))
+            products_count_label.setText(
+                f"📦 {products_list.count()} منتج مؤهل  |  ✅ {products_list.count()} محدد"
+            )
+
+        def _deselect_all():
+            for i in range(products_list.count()):
+                item = products_list.item(i)
+                item.setCheckState(Qt.CheckState.Unchecked)
+                selected_ids.discard(item.data(Qt.ItemDataRole.UserRole))
+            products_count_label.setText(
+                f"📦 {products_list.count()} منتج مؤهل  |  ✅ 0 محدد"
+            )
+
+        # Debounced search
+        _search_timer = QTimer()
+        _search_timer.setSingleShot(True)
+        _search_timer.setInterval(300)
+        _search_timer.timeout.connect(lambda: _populate_products(product_search.text().strip()))
+        product_search.textChanged.connect(lambda: _search_timer.start())
+
+        # Re-filter when discount percent changes
+        percent.valueChanged.connect(lambda: _populate_products(product_search.text().strip()))
+        products_list.itemChanged.connect(_on_item_changed)
+        select_all_btn.clicked.connect(_select_all)
+        deselect_all_btn.clicked.connect(_deselect_all)
+
+        # Initial load
+        _populate_products()
+
+        # ─── Action Buttons ───
         buttons, save_btn, cancel_btn = action_row()
         save_btn.clicked.connect(
             lambda: self._save_discount_company(
@@ -426,7 +604,7 @@ class AccountsView(QWidget):
             )
         )
         cancel_btn.clicked.connect(dialog.reject)
-        layout.addRow(buttons)
+        layout.addWidget(buttons)
         dialog.exec()
 
     def _save_discount_company(
