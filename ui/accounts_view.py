@@ -604,7 +604,7 @@ class AccountsView(QWidget):
             )
         )
         cancel_btn.clicked.connect(dialog.reject)
-        layout.addWidget(buttons)
+        layout.addLayout(buttons)
         dialog.exec()
 
     def _save_discount_company(
