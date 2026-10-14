@@ -243,9 +243,9 @@ class ReturnsView(QWidget):
             row = self.items_table.rowCount()
             self.items_table.insertRow(row)
 
-            sold_qty = item.get("quantity", 1)
-            returned = item.get("returned_quantity", 0)
-            available = max(0, sold_qty - returned)
+            sold_qty = float(item.get("quantity") or 0)
+            returned = float(item.get("returned_quantity") or 0)
+            available = max(0.0, sold_qty - returned)
 
             try:
                 total_price = float(
@@ -256,7 +256,7 @@ class ReturnsView(QWidget):
                     if sold_qty > 0
                     else float(item.get("unit_price", 0))
                 )
-            except:
+            except Exception:
                 effective_price = float(item.get("unit_price", 0))
 
             prod_item = self._table_item(item["product_name"])
@@ -270,8 +270,10 @@ class ReturnsView(QWidget):
             self.items_table.setItem(row, 0, prod_item)
             self.items_table.setItem(row, 1, self._table_item(f"{effective_price:.2f}"))
 
+            sold_str = f"{int(sold_qty)}" if sold_qty.is_integer() else f"{sold_qty:g}"
+            avail_str = f"{int(available)}" if available.is_integer() else f"{available:g}"
             qty_text = (
-                f"{sold_qty}" if returned == 0 else f"{available} (من أصل {sold_qty})"
+                sold_str if returned == 0 else f"{avail_str} (من أصل {sold_str})"
             )
             qty_item = self._table_item(qty_text)
             self.items_table.setItem(row, 2, qty_item)
@@ -300,7 +302,7 @@ class ReturnsView(QWidget):
             """)
             if available <= 0:
                 spin.setEnabled(False)
-                qty_item.setText(f"تم الإرجاع ({sold_qty})")
+                qty_item.setText(f"تم الإرجاع ({sold_str})")
                 qty_item.setForeground(QColor(COLORS.get("danger", "#FF0000")))
 
             spin_cell = QWidget()

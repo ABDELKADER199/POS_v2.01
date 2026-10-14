@@ -85,12 +85,22 @@ class ReturnsRepository(BaseRepository):
         prod_counts = Counter(int(r["product_id"]) for r in rows)
         for r in rows:
             pid = int(r["product_id"])
+            r["quantity"] = float(r.get("quantity") or 0)
+            r["unit_price"] = float(r.get("unit_price") or 0)
+            r["total_price"] = float(r.get("total_price") or 0)
+            r["discount"] = float(r.get("discount") or 0)
             if not r.get("buy_price"):
                 r["buy_price"] = float(r.get("fallback_buy_price") or 0)
+            else:
+                r["buy_price"] = float(r["buy_price"])
             if "item_subtotal" not in r or r["item_subtotal"] is None:
                 r["item_subtotal"] = float(r.get("total_price") or 0)
+            else:
+                r["item_subtotal"] = float(r["item_subtotal"])
             if "item_tax" not in r or r["item_tax"] is None:
                 r["item_tax"] = 0.0
+            else:
+                r["item_tax"] = float(r["item_tax"])
             line_ret = float(r.get("line_returned_quantity") or 0)
             legacy_ret = float(r.get("legacy_unassigned_returned_quantity") or 0)
             r["line_returned_amount"] = float(r.get("line_returned_amount") or 0)
