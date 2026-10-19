@@ -1,14 +1,96 @@
+
+# ==============================
+# 1. Secrets and environment
+# ==============================
 .env
-*.log
-logs/
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# ==============================
+# 2. Local databases and backups
+# ==============================
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.bak
+*.backup
+*.sql.gz
 backups/
-.tmp/
-.pytest_cache/
+backup/
+
+# ==============================
+# 3. Real invoices and financial data
+# ==============================
+/الفواتير/
+/الخزينة/
+
+# ==============================
+# 4. Logs and generated output
+# ==============================
+logs/
+*.log
+*.trace.zip
+test-results/
+backup_test_output.txt
+test_output*.txt
+temp_out.txt
+out.txt
+install_log.txt
+
+# ==============================
+# 5. Python environments and cache
+# ==============================
+.venv/
+venv/
+env/
 __pycache__/
-*.pyc
-build/
-dist/
-*.spec
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Bundled local Python environment
+/Lib/
+/Scripts/
+
+# ==============================
+# 6. Temporary test artifacts
+# ==============================
+.test_tmp/
+.tmp/
+
+# ==============================
+# 7. Build artifacts
+# ==============================
+/build/
+/dist/
+
+# Local diagnostic output
 bootdebug_*.txt
 debug_*.txt
 python_run_*.txt
+test_output*.txt
+backup_test_output.txt
+out.txt
+temp_out.txt
+install_log.txt
+
+# Generated frontend test artifacts
+/web/frontend/test-results/
+
+git check-ignore -v --no-index -- `
+>>     "الفواتير/فواتير البيع/2026/أكتوبر/11.pdf"
+.gitignore:31:/الفواتير/        "\330\247\331\204\331\201\331\210\330\247\330\252\331\212\330\261/\331\201\331\210\330\247\330\252\331\212\330\261 \330\247\331\204\330\250\331\212\330\271/2026/\330\243\331\203\330\252\331\210\330\250\330\261/11.pdf"
+(.venv) PS D:\Python Desktop\POS_V2> 
+
+# Local/debug/test PyInstaller specs
+HyperPOS_V2_bootdebug.spec
+HyperPOS_V2_debug.spec
+HyperPOS_test.spec
