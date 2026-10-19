@@ -1177,16 +1177,22 @@ class ProductView(QWidget):
             product_id = item.get("id")
             item_store_id = item.get("store_id") or store_id
             current_qty = int(item.get("quantity_in_stock") or 0)
+            min_qty = int(item.get("min_quantity", item.get("minimum_quantity", 0)) or 0)
+            is_low = current_qty <= min_qty
+
             values = [
                 item.get("product_code", ""),
                 item.get("product_name", ""),
                 item.get("store_name", ""),
                 str(current_qty),
-                str(item.get("min_quantity", item.get("minimum_quantity", 0)) or 0),
+                str(min_qty),
                 f"{float(item.get('sell_price', 0) or 0):,.2f}",
             ]
             for col, value in enumerate(values):
                 table_item = center_item(value)
+                if col == 3 and is_low:
+                    table_item.setText(f"⚠️ {value} (منخفض)" if current_qty > 0 else f"🚨 {value} (نفد)")
+                    table_item.setForeground(QColor("#dc2626"))
                 if col == 0:
                     table_item.setData(
                         Qt.ItemDataRole.UserRole, (product_id, item_store_id)
@@ -1599,6 +1605,14 @@ class ProductView(QWidget):
         settings.addLayout(copies_box)
         preview_layout.addLayout(settings)
 
+        template_box = QVBoxLayout()
+        template_box.addWidget(QLabel("🎨 قالب الملصق:"))
+        self.barcode_template = QComboBox()
+        self.barcode_template.addItems(["قالب قياسي (كود + اسم)", "قالب عريض (مع السعر)", "قالب تفصيلي (اسم + باركود + سعر)"])
+        self.barcode_template.setStyleSheet(INPUT_STYLE)
+        template_box.addWidget(self.barcode_template)
+        preview_layout.addLayout(template_box)
+
         preview_layout.addWidget(QLabel("🖨️ اختر الطابعة:"))
         self.barcode_printer = QComboBox()
         self.barcode_printer.setStyleSheet(INPUT_STYLE)
@@ -1934,6 +1948,12 @@ class ProductView(QWidget):
 
             # Actions
             action_buttons = []
+            history_btn = table_action_button(
+                "📈 السجل",
+                "info",
+                lambda checked=False, p_obj=p: self._show_price_history(p_obj),
+            )
+            action_buttons.append(history_btn)
             if can_edit:
                 edit_btn = table_action_button(
                     "تعديل",
@@ -2127,3 +2147,34 @@ class ProductView(QWidget):
                 self._load_barcode_products()
             else:
                 QMessageBox.warning(self, "خطأ", "لم يتم حذف المنتج")
+
+    def _show_price_history(self, product):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"سجل أسعار الصنف: {product.product_name}")
+        style_dialog(dialog, min_width=450, min_height=300)
+        _, content_layout, footer_layout = scrollable_dialog_layout(dialog)
+        
+        info = QLabel(
+            f"<b>كود الصنف:</b> {product.product_code}<br>"
+            f"<b>اسم الصنف:</b> {product.product_name}<br>"
+            f"<b>سعر الشراء الحالي:</b> {float(product.buy_price or 0):,.2f} ج.م<br>"
+            f"<b>سعر البيع الحالي:</b> {float(product.sell_price or 0):,.2f} ج.م"
+        )
+        info.setStyleSheet("font-size: 13px; line-height: 1.6; padding: 5px;")
+        content_layout.addWidget(info)
+        
+        history_table = QTableWidget(0, 3)
+        history_table.setHorizontalHeaderLabels(["التاريخ", "سعر الشراء", "سعر البيع"])
+        history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        configure_table(history_table, TABLE_STYLE)
+        
+        history_table.setRowCount(1)
+        set_center_item(history_table, 0, 0, str(getattr(product, 'updated_at', 'الحالي')))
+        set_center_item(history_table, 0, 1, f"{float(product.buy_price or 0):,.2f}")
+        set_center_item(history_table, 0, 2, f"{float(product.sell_price or 0):,.2f}")
+        content_layout.addWidget(history_table)
+        
+        btn_layout, ok_btn, _ = action_row("إغلاق")
+        ok_btn.clicked.connect(dialog.accept)
+        footer_layout.addLayout(btn_layout)
+        dialog.exec()

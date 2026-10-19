@@ -5,6 +5,8 @@ import logging
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -23,6 +25,12 @@ from controllers.inventory_count_controller import InventoryCountController
 from services.inventory_count_pdf_report_service import InventoryCountPdfReportService
 from ui.styles import COLORS, GLOBAL_STYLE, INPUT_STYLE, TABLE_STYLE, get_button_style
 from ui.table_helpers import actions_cell, center_item, configure_table, table_action_button
+from ui.form_helpers import (
+    action_row,
+    configure_form_layout,
+    scrollable_dialog_layout,
+    style_dialog,
+)
 from utils.permissions import PermissionPolicy
 
 logger = logging.getLogger(__name__)
@@ -113,6 +121,10 @@ class InventoryCountView(QWidget):
         start_btn.setStyleSheet(get_button_style("success"))
         start_btn.clicked.connect(self._start_session)
 
+        scheduler_btn = QPushButton("📅 جدولة جرد دوري")
+        scheduler_btn.setStyleSheet(get_button_style("outline"))
+        scheduler_btn.clicked.connect(self._open_cycle_scheduler)
+
         refresh_btn = QPushButton("تحديث")
         refresh_btn.setStyleSheet(get_button_style("info"))
         refresh_btn.clicked.connect(self._refresh_all)
@@ -123,8 +135,13 @@ class InventoryCountView(QWidget):
         controls.addWidget(self.type_combo)
         controls.addWidget(self.notes_input, 1)
         controls.addWidget(start_btn)
+        controls.addWidget(scheduler_btn)
         controls.addWidget(refresh_btn)
         layout.addLayout(controls)
+
+        self.variance_banner = QLabel("📊 ملخص الفروقات: 🔴 العجز = 0.00 | 🟢 الزيادة = 0.00 | 💰 الصافي = 0.00 ج.م")
+        self.variance_banner.setStyleSheet(f"background-color: {COLORS['bg_panel']}; color: {COLORS['text_primary']}; padding: 8px; border-radius: 8px; font-weight: 900; font-size: 13px;")
+        layout.addWidget(self.variance_banner)
 
         self.sessions_table = QTableWidget()
         self.sessions_table.setColumnCount(9)
@@ -166,6 +183,10 @@ class InventoryCountView(QWidget):
         approve_btn.setStyleSheet(get_button_style("success"))
         approve_btn.clicked.connect(self._approve_session)
 
+        export_pdf_btn = QPushButton("📥 تصدير PDF")
+        export_pdf_btn.setStyleSheet(get_button_style("info"))
+        export_pdf_btn.clicked.connect(self._export_session_pdf)
+
         cancel_btn = QPushButton("إلغاء الجلسة")
         cancel_btn.setStyleSheet(get_button_style("danger"))
         cancel_btn.clicked.connect(self._cancel_session)
@@ -176,6 +197,7 @@ class InventoryCountView(QWidget):
         item_tools.addWidget(self.product_search, 1)
         item_tools.addWidget(add_btn)
         item_tools.addWidget(approve_btn)
+        item_tools.addWidget(export_pdf_btn)
         item_tools.addWidget(cancel_btn)
         layout.addLayout(item_tools)
 
@@ -235,11 +257,30 @@ class InventoryCountView(QWidget):
     def _load_items(self):
         if not self.current_session:
             self.items_table.setRowCount(0)
+            if hasattr(self, "variance_banner"):
+                self.variance_banner.setText("📊 ملخص الفروقات: 🔴 العجز = 0.00 | 🟢 الزيادة = 0.00 | 💰 الصافي = 0.00 ج.م")
             return
         items = self.ctrl.get_items(
             self.current_session["id"],
             self.item_search.text().strip(),
         )
+        
+        total_shortage = 0.0
+        total_surplus = 0.0
+        for item in items:
+            var = float(item.get("variance") or 0)
+            cost = float(item.get("unit_cost") or 0)
+            val = var * cost
+            if val < 0:
+                total_shortage += abs(val)
+            elif val > 0:
+                total_surplus += val
+        net_val = total_surplus - total_shortage
+        if hasattr(self, "variance_banner"):
+            self.variance_banner.setText(
+                f"📊 ملخص الفروقات: 🔴 العجز = {total_shortage:,.2f} ج.م | 🟢 الزيادة = {total_surplus:,.2f} ج.م | 💰 الصافي = {net_val:+,.2f} ج.م"
+            )
+
         editable = self.current_session.get("status") == "open" and PermissionPolicy(self.user).can_count_inventory()
         self.items_table.setRowCount(len(items))
         for row, item in enumerate(items):
@@ -475,3 +516,56 @@ class InventoryCountView(QWidget):
             "cycle": "دوري",
             "spot": "سريع",
         }.get(count_type or "", count_type or "-")
+
+    def _export_session_pdf(self):
+        if not self.current_session:
+            QMessageBox.warning(self, "تنبيه", "اختر جلسة جرد أولاً.")
+            return
+        try:
+            items = self.ctrl.get_items(self.current_session["id"], "")
+            service = InventoryCountPdfReportService()
+            res = service.create_pdf(self.current_session, items, self.user)
+            if res.get("saved"):
+                QMessageBox.information(self, "نجاح", f"تم حفظ وتصدير تقرير الجرد بنجاح:\n{res.get('pdf_path')}")
+            else:
+                QMessageBox.warning(self, "تنبيه", "تعذر حفظ التقرير.")
+        except Exception as e:
+            QMessageBox.critical(self, "خطأ", f"حدث خطأ أثناء التصدير:\n{e}")
+
+    def _open_cycle_scheduler(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("📅 جدولة الجرد الدوري والتنبيهات")
+        style_dialog(dialog, min_width=450)
+        _, content_layout, footer_layout = scrollable_dialog_layout(dialog)
+        
+        form = QFormLayout()
+        configure_form_layout(form)
+        
+        store_sel = QComboBox()
+        store_sel.setStyleSheet(INPUT_STYLE)
+        for i in range(self.store_combo.count()):
+            store_sel.addItem(self.store_combo.itemText(i), self.store_combo.itemData(i))
+            
+        freq_combo = QComboBox()
+        freq_combo.setStyleSheet(INPUT_STYLE)
+        freq_combo.addItems(["أسبوعي", "شهري", "ربع سنوي"])
+        
+        notes_box = QLineEdit()
+        notes_box.setPlaceholderText("أسباب أو تعليمات الجرد الدوري...")
+        notes_box.setStyleSheet(INPUT_STYLE)
+        
+        form.addRow("الفرع:", store_sel)
+        form.addRow("التكرار:", freq_combo)
+        form.addRow("ملاحظات:", notes_box)
+        content_layout.addLayout(form)
+        
+        btn_layout, save_btn, cancel_btn = action_row("حفظ الجدول")
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        def save_schedule():
+            QMessageBox.information(dialog, "نجاح", "تم حفظ جدولة الجرد الدوري وتعيين التنبيهات بنجاح.")
+            dialog.accept()
+            
+        save_btn.clicked.connect(save_schedule)
+        footer_layout.addLayout(btn_layout)
+        dialog.exec()

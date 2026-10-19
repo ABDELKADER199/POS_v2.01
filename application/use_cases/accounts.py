@@ -480,6 +480,7 @@ class PromotionsUseCase:
         try:
             data = self._validate_promotion_payload(kwargs, require_all=True)
             self._ensure_promotion_keeps_minimum_margin(data)
+            self._ensure_no_conflicting_offers_or_discounts(data)
             self.repo.insert_promotion(**data)
             self.repo.commit()
             return True
@@ -500,7 +501,9 @@ class PromotionsUseCase:
                 return True
             if hasattr(self.repo, "get_promotion_by_id"):
                 current = self.repo.get_promotion_by_id(promo_id) or {}
-                self._ensure_promotion_keeps_minimum_margin({**current, **data})
+                merged = {**current, **data}
+                self._ensure_promotion_keeps_minimum_margin(merged)
+                self._ensure_no_conflicting_offers_or_discounts(merged, promo_id=promo_id)
             self.repo.update_promotion_record(promo_id, data)
             self.repo.commit()
             return True
@@ -511,6 +514,22 @@ class PromotionsUseCase:
                 "Error updating promotion %s: %s", promo_id, exc, exc_info=True
             )
             return False
+
+    def _ensure_no_conflicting_offers_or_discounts(self, promo: Dict, promo_id: int = None) -> None:
+        if not hasattr(self.repo, "get_product_ids_for_target") or not hasattr(self.repo, "check_product_has_offer_or_discount"):
+            return
+        apply_to = promo.get("apply_to")
+        apply_to_id = promo.get("apply_to_id")
+        product_ids = self.repo.get_product_ids_for_target(apply_to, apply_to_id)
+        if not product_ids:
+            return
+        conflicts = self.repo.check_product_has_offer_or_discount(product_ids, exclude_promo_id=promo_id)
+        if conflicts:
+            details = "\n".join(f"• {c}" for c in conflicts[:5])
+            raise AccountsValidationError(
+                "لا يمكن تطبيق عرض على صنف عليه عرض أو خصم فعلي بالفعل:\n"
+                f"{details}"
+            )
 
     def toggle(self, promo_id) -> bool:
         if not promo_id:
@@ -775,7 +794,18 @@ class DiscountCompaniesUseCase:
                 raise ValueError("اسم شركة الخصم مطلوب")
             if not 0 < discount_percent <= 100:
                 raise ValueError("نسبة خصم الشركة يجب أن تكون بين 0 و100")
-            self.repo.insert_discount_company(name, discount_percent, product_ids or [])
+            
+            pids = [int(p) for p in (product_ids or []) if p]
+            if pids and hasattr(self.repo, "check_product_has_offer_or_discount"):
+                conflicts = self.repo.check_product_has_offer_or_discount(pids)
+                if conflicts:
+                    details = "\n".join(f"• {c}" for c in conflicts[:5])
+                    raise ValueError(
+                        "لا يمكن تطبيق خصم على صنف عليه عرض أو خصم فعلي بالفعل:\n"
+                        f"{details}"
+                    )
+
+            self.repo.insert_discount_company(name, discount_percent, pids)
             self.repo.commit()
             return True
         except Exception as exc:
@@ -796,6 +826,17 @@ class DiscountCompaniesUseCase:
                 raise ValueError("اسم شركة الخصم مطلوب")
             if not 0 < discount_percent <= 100:
                 raise ValueError("نسبة خصم الشركة يجب أن تكون بين 0 و100")
+            
+            pids = [int(p) for p in (product_ids or []) if p]
+            if pids and hasattr(self.repo, "check_product_has_offer_or_discount"):
+                conflicts = self.repo.check_product_has_offer_or_discount(pids, exclude_company_id=company_id)
+                if conflicts:
+                    details = "\n".join(f"• {c}" for c in conflicts[:5])
+                    raise ValueError(
+                        "لا يمكن تطبيق خصم على صنف عليه عرض أو خصم فعلي بالفعل:\n"
+                        f"{details}"
+                    )
+
             self.repo.update_discount_company(
                 company_id,
                 {
@@ -803,7 +844,7 @@ class DiscountCompaniesUseCase:
                     "discount_percent": discount_percent,
                     "is_active": bool(is_active),
                 },
-                product_ids or [],
+                pids,
             )
             self.repo.commit()
             return True

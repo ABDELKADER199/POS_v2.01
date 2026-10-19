@@ -3,6 +3,7 @@ Cashier View - واجهة الكاشير (Passive View)
 لا تحتوي على أي منطق أعمال - تعرض البيانات وترسل الأحداث للـ Controller
 """
 
+import logging
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -24,6 +25,8 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
     QInputDialog,
+    QToolButton,
+    QMenu,
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QDate
 from PyQt6.QtGui import QFont, QShortcut, QKeySequence, QColor
@@ -48,6 +51,8 @@ from ui.table_helpers import (
 )
 from utils.permissions import PermissionPolicy
 from services.whatsapp_share_service import WhatsAppShareService
+
+logger = logging.getLogger(__name__)
 
 
 class CashierView(QWidget):
@@ -205,25 +210,23 @@ class CashierView(QWidget):
         )
         toolbar_layout.addWidget(self.drawer_status_label)
 
-        self.open_drawer_btn = QPushButton("🔓 فتح درج")
-        self.open_drawer_btn.setStyleSheet(
-            get_button_style("success")
-            + " font-size: 12px; font-weight: 900; min-height: 34px;"
+        self.admin_menu_btn = QToolButton()
+        self.admin_menu_btn.setText("🛠️ إدارة الدرج والأمان")
+        self.admin_menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.admin_menu_btn.setStyleSheet(
+            get_button_style("warning")
+            + " font-size: 12px; font-weight: 900; min-height: 34px; padding: 4px 12px;"
         )
-        self.open_drawer_btn.setFixedWidth(108)
-        self.open_drawer_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.open_drawer_btn.clicked.connect(self._open_drawer_from_cashier)
-        toolbar_layout.addWidget(self.open_drawer_btn)
-
-        self.close_drawer_btn = QPushButton("🔒 غلق درج")
-        self.close_drawer_btn.setStyleSheet(
-            get_button_style("danger")
-            + " font-size: 12px; font-weight: 900; min-height: 34px;"
-        )
-        self.close_drawer_btn.setFixedWidth(108)
-        self.close_drawer_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.close_drawer_btn.clicked.connect(self._close_drawer_from_cashier)
-        toolbar_layout.addWidget(self.close_drawer_btn)
+        self.admin_menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        menu = QMenu(self)
+        menu.setStyleSheet(GLOBAL_STYLE)
+        menu.addAction("🔓 فتح درج", self._open_drawer_from_cashier)
+        menu.addAction("🔒 غلق درج", self._close_drawer_from_cashier)
+        menu.addSeparator()
+        menu.addAction("🔒 قفل الشاشة", self._open_lock_screen_dialog)
+        self.admin_menu_btn.setMenu(menu)
+        toolbar_layout.addWidget(self.admin_menu_btn)
 
         toolbar_layout.addStretch()
 
@@ -848,19 +851,11 @@ class CashierView(QWidget):
             self.drawer_status_label.setStyleSheet(
                 f"color: {COLORS['success']}; font-weight: 800; padding: 4px 8px;"
             )
-            self.open_drawer_btn.hide()
-            can_close = (
-                store_drawer.get("cashier_id") == self.user_info.get("id")
-                or PermissionPolicy(self.user_info).can_close_shared_drawer()
-            )
-            self.close_drawer_btn.setVisible(can_close)
         else:
             self.drawer_status_label.setText("لا يوجد درج مفتوح")
             self.drawer_status_label.setStyleSheet(
                 f"color: {COLORS['warning']}; font-weight: 800; padding: 4px 8px;"
             )
-            self.open_drawer_btn.show()
-            self.close_drawer_btn.hide()
             if store_id:
                 self.ctrl.set_store(store_id)
 
@@ -1291,6 +1286,9 @@ class CashierView(QWidget):
         return f"{quantity:.3f}".rstrip("0").rstrip(".")
 
     def _update_item_quantity(self, index: int, quantity: float):
+        if not self._verify_manager_pin("تعديل كمية صنف في الفاتورة"):
+            self._refresh_invoice()
+            return
         try:
             self.ctrl.update_item_quantity(index, quantity)
             item = self.ctrl.current_items[index]
@@ -1308,6 +1306,16 @@ class CashierView(QWidget):
 
     def _remove_item(self, index):
         """حذف بند من الفاتورة"""
+        if not self._verify_manager_pin("حذف صنف من الفاتورة (Void Item)"):
+            return
+        reason, ok = QInputDialog.getText(self, "سبب الحذف", "أدخل سبب حذف الصنف من الفاتورة:")
+        if not ok or not reason.strip():
+            QMessageBox.warning(self, "تنبيه", "سبب الحذف إلزامي.")
+            return
+        try:
+            logger.info("Item removed by user %s: reason=%s", self.user_info.get("id"), reason)
+        except Exception:
+            pass
         self.ctrl.remove_item(index)
         self._refresh_invoice()
         self._schedule_customer_totals()
@@ -1968,6 +1976,132 @@ class CashierView(QWidget):
         dialog.show()
         # Store reference to prevent garbage collection if not parented correctly
         setattr(self, f"_{dialog.windowTitle()}_dialog", dialog)
+
+    def _open_lock_screen_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🔒 قفل الشاشة - تبديل الكاشير السريع")
+        dialog.setFixedWidth(400)
+        dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowType.WindowCloseButtonHint)
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        dialog.setStyleSheet(GLOBAL_STYLE)
+        dialog.reject = lambda: None
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+        
+        lbl = QLabel("الشاشة مقفولة حالياً لأسباب أمنية.\nأدخل بيانات الكاشير الجديد أو المشرف لفتح النظام:")
+        lbl.setStyleSheet(f"color: {COLORS['text_primary']}; font-weight: bold; font-size: 13px;")
+        layout.addWidget(lbl)
+        
+        form = QFormLayout()
+        user_input = QLineEdit()
+        user_input.setPlaceholderText("اسم المستخدم / البريد الإلكتروني...")
+        user_input.setStyleSheet(INPUT_STYLE)
+        
+        pass_input = QLineEdit()
+        pass_input.setPlaceholderText("كلمة المرور...")
+        pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        pass_input.setStyleSheet(INPUT_STYLE)
+        
+        form.addRow("المستخدم:", user_input)
+        form.addRow("كلمة المرور:", pass_input)
+        layout.addLayout(form)
+        
+        from PyQt6.QtWidgets import QApplication
+        from ui.form_helpers import action_row
+        btn_layout, unlock_btn, cancel_btn = action_row("🔓 إلغاء القفل")
+        cancel_btn.setText("خروج من البرنامج")
+        cancel_btn.clicked.connect(lambda: QApplication.quit())
+        
+        def authenticate():
+            username = user_input.text().strip()
+            password = pass_input.text().strip()
+            if not username or not password:
+                QMessageBox.warning(dialog, "تنبيه", "يرجى إدخال اسم المستخدم وكلمة المرور.")
+                return
+            try:
+                from repositories.user_repo import UserRepository
+                user_repo = UserRepository()
+                user = user_repo.authenticate(username, password)
+                if user:
+                    user_dict = user.to_dict() if hasattr(user, "to_dict") else {"id": getattr(user, "id", 1), "name": getattr(user, "name", "User"), "role": getattr(user, "role", "cashier")}
+                    self.user_info = user_dict
+                    uname = user_dict.get("name") or user_dict.get("username") or "مستخدم"
+                    QMessageBox.information(dialog, "نجاح", f"مرحباً بك مجدداً، {uname}")
+                    dialog.reject = lambda: super(QDialog, dialog).reject()
+                    dialog.accept()
+                else:
+                    QMessageBox.warning(dialog, "خطأ أمني", "اسم المستخدم أو كلمة المرور غير صحيحة.")
+            except Exception as exc:
+                logger.error("Lock screen auth error: %s", exc, exc_info=True)
+                QMessageBox.critical(dialog, "خطأ", f"تعذر التحقق من بيانات الدخول:\n{exc}")
+                
+        unlock_btn.clicked.connect(authenticate)
+        layout.addLayout(btn_layout)
+        dialog.exec()
+
+    def _verify_manager_pin(self, action_name: str) -> bool:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"موافقة إدارية مطلوبة - {action_name}")
+        dialog.setFixedWidth(380)
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        dialog.setStyleSheet(GLOBAL_STYLE)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+        
+        lbl = QLabel(f"هذا الإجراء ({action_name}) يتطلب صلاحية مشرف / مدير:\nأدخل كلمة المرور للاعتماد (أو اضغط إلغاء للتراجع):")
+        lbl.setStyleSheet(f"color: {COLORS['text_primary']}; font-weight: bold; font-size: 13px;")
+        layout.addWidget(lbl)
+        
+        form = QFormLayout()
+        user_input = QLineEdit()
+        user_input.setPlaceholderText("اسم المستخدم المشرف...")
+        user_input.setStyleSheet(INPUT_STYLE)
+        
+        pass_input = QLineEdit()
+        pass_input.setPlaceholderText("كلمة المرور...")
+        pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        pass_input.setStyleSheet(INPUT_STYLE)
+        
+        form.addRow("المشرف:", user_input)
+        form.addRow("كلمة المرور:", pass_input)
+        layout.addLayout(form)
+        
+        from ui.form_helpers import action_row
+        btn_layout, ok_btn, cancel_btn = action_row("اعتماد")
+        cancel_btn.setText("إلغاء")
+        
+        verified = [False]
+        def check():
+            u = user_input.text().strip()
+            p = pass_input.text().strip()
+            if not u or not p:
+                QMessageBox.warning(dialog, "تنبيه", "أدخل اسم المستخدم وكلمة المرور.")
+                return
+            try:
+                from repositories.user_repo import UserRepository
+                repo = UserRepository()
+                usr = repo.authenticate(u, p)
+                if usr:
+                    usr_dict = usr.to_dict() if hasattr(usr, "to_dict") else {"id": getattr(usr, "id", 1), "role": getattr(usr, "role", "cashier")}
+                    if usr_dict.get("role") in ("admin", "manager") or PermissionPolicy(usr_dict).can_manage_users():
+                        verified[0] = True
+                        dialog.accept()
+                    else:
+                        QMessageBox.warning(dialog, "خطأ أمني", "حساب غير مصرح له بهذه الصلاحية.")
+                else:
+                    QMessageBox.warning(dialog, "خطأ أمني", "اسم المستخدم أو كلمة المرور غير صحيحة.")
+            except Exception as e:
+                QMessageBox.critical(dialog, "خطأ", f"خطأ في التحقق:\n{e}")
+                
+        ok_btn.clicked.connect(check)
+        cancel_btn.clicked.connect(dialog.reject)
+        layout.addLayout(btn_layout)
+        dialog.exec()
+        return verified[0]
 
     def closeEvent(self, event):
         if self.customer_display:

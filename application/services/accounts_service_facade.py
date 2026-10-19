@@ -161,6 +161,15 @@ class AccountsServiceFacade:
     def search_discount_eligible_products(self, term="", min_margin_percent=0.0):
         return self.discount_companies_use_case.search_eligible_products(term, min_margin_percent)
 
+    def check_product_has_offer_or_discount(
+        self, product_ids, exclude_promo_id=None, exclude_company_id=None
+    ):
+        if hasattr(self.repo, "check_product_has_offer_or_discount"):
+            return self.repo.check_product_has_offer_or_discount(
+                product_ids, exclude_promo_id, exclude_company_id
+            )
+        return []
+
     # ── PDF Reports ────────────────────────────────────
 
     def create_customer_account_pdf(

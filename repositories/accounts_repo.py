@@ -968,6 +968,79 @@ class AccountsRepository(BaseRepository):
         query += " ORDER BY product_name LIMIT 5000"
         return self._fetch_all(query, tuple(params))
 
+    def get_product_ids_for_target(self, apply_to: str, apply_to_id=None) -> List[int]:
+        try:
+            if apply_to == "product":
+                return [int(apply_to_id)] if apply_to_id else []
+            elif apply_to == "category":
+                rows = self._fetch_all(
+                    "SELECT id FROM products WHERE category_id = %s AND is_active = TRUE",
+                    (apply_to_id,),
+                )
+                return [int(r["id"]) for r in rows]
+            elif apply_to == "all":
+                rows = self._fetch_all("SELECT id FROM products WHERE is_active = TRUE")
+                return [int(r["id"]) for r in rows]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting product ids for target: {e}")
+            return []
+
+    def check_product_has_offer_or_discount(
+        self,
+        product_ids: List[int],
+        exclude_promo_id: int = None,
+        exclude_company_id: int = None,
+    ) -> List[str]:
+        if not product_ids:
+            return []
+        conflicts = []
+        try:
+            placeholders = ", ".join(["%s"] * len(product_ids))
+            
+            # 1. Check active promotions
+            promo_query = f"""
+                SELECT DISTINCT p.id, p.name as promo_name, pr.product_name
+                FROM promotions p
+                JOIN products pr ON (
+                    p.apply_to = 'all'
+                    OR (p.apply_to = 'category' AND pr.category_id = p.apply_to_id)
+                    OR (p.apply_to = 'product' AND pr.id = p.apply_to_id)
+                )
+                WHERE p.is_active = TRUE
+                  AND CURDATE() BETWEEN DATE(p.start_date) AND DATE(p.end_date)
+                  AND pr.id IN ({placeholders})
+            """
+            params = list(product_ids)
+            if exclude_promo_id:
+                promo_query += " AND p.id != %s"
+                params.append(exclude_promo_id)
+            
+            active_promos = self._fetch_all(promo_query, tuple(params))
+            for row in active_promos:
+                conflicts.append(f"المنتج '{row.get('product_name')}' لديه عرض نشط بالفعل ('{row.get('promo_name')}')")
+
+            # 2. Check active discount companies
+            company_query = f"""
+                SELECT DISTINCT dc.id, dc.name as company_name, pr.product_name, dc.discount_percent
+                FROM discount_companies dc
+                JOIN discount_company_products dcp ON dc.id = dcp.company_id
+                JOIN products pr ON pr.id = dcp.product_id
+                WHERE dc.is_active = TRUE
+                  AND pr.id IN ({placeholders})
+            """
+            company_params = list(product_ids)
+            if exclude_company_id:
+                company_query += " AND dc.id != %s"
+                company_params.append(exclude_company_id)
+                
+            active_companies = self._fetch_all(company_query, tuple(company_params))
+            for row in active_companies:
+                conflicts.append(f"المنتج '{row.get('product_name')}' لديه خصم فعلي من شركة '{row.get('company_name')}' ({row.get('discount_percent') or 0:g}%)")
+        except Exception as e:
+            logger.error(f"Error checking product offer/discount conflicts: {e}")
+        return conflicts
+
     def get_active_promotion_catalog_products(self) -> List[Dict]:
         try:
             return self._fetch_all("""

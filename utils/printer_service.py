@@ -92,7 +92,7 @@ class PrinterService:
                 width: 100%;
                 max-width: 72mm;
                 margin: 0 auto;
-                padding: 4px 6px;
+                padding: 2px 2px;
             }
             .header {
                 text-align: center;
@@ -358,19 +358,22 @@ class PrinterService:
         """Generates modern HTML for sales receipts and orders."""
         rows = ""
         for index, item in enumerate(items, start=1):
-            name = escape(str(item.get('product_name', 'Unknown') or 'Unknown'))
-            code = escape(str(item.get('product_code', '') or ''))
+            raw_name = str(item.get('product_name', 'Unknown') or 'Unknown')
+            if len(raw_name) > 30:
+                raw_name = raw_name[:28] + ".."
+            name = escape(raw_name)
             qty = float(item.get('quantity', 0) or 0)
             price = float(item.get('price', item.get('unit_price', 0)) or 0)
             total = float(item.get('total', qty * price) or 0)
-            code_html = f"<span>كود: {code}</span> · " if code else ""
+            line_disc = float(item.get('line_discount', item.get('discount', 0)) or 0)
+            disc_str = f" - خصم: {PrinterService._money(line_disc)}" if line_disc > 0 else ""
             rows += f"""
             <tr>
-                <td>
-                    <span class="item-name">{index}. {name}</span>
-                    <span class="item-details">{code_html}{PrinterService._money(qty)} × {PrinterService._money(price)}</span>
+                <td style="width: 78%; padding: 3px 1px; font-size: 9px; vertical-align: middle; border-bottom: 1px dotted #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 195px;">
+                    <span style="font-weight: 600; color: #111827; font-size: 9.5px;">{index}. {name}</span>
+                    <span style="font-size: 8px; color: #4b5563; margin-right: 3px;">({PrinterService._money(qty)} × {PrinterService._money(price)}{disc_str})</span>
                 </td>
-                <td class="item-total">{PrinterService._money(total)}</td>
+                <td class="item-total" style="width: 22%; padding: 3px 1px; font-size: 9.5px; font-weight: 600; text-align: left; vertical-align: middle; border-bottom: 1px dotted #cbd5e1; white-space: nowrap;">{PrinterService._money(total)}</td>
             </tr>
             """
 
@@ -457,6 +460,22 @@ class PrinterService:
             <tr><td class="total-label">الباقي:</td><td class="total-value">{PrinterService._money(invoice_data.get("change", 0))}</td></tr>
             """
 
+        credit_statement_html = ""
+        if method in ('Credit', 'آجل') or invoice_data.get('is_credit') or invoice_data.get('customer_balance_due') is not None:
+            prev_balance = float(invoice_data.get('previous_customer_balance', 0) or 0)
+            current_invoice_total = float(invoice_data.get('total_amount', invoice_data.get('total', 0)) or 0)
+            total_balance_due = prev_balance + current_invoice_total
+            credit_statement_html = f"""
+            <div style="margin-top: 10px; padding: 8px; border: 1px dashed #1e293b; border-radius: 6px; background-color: #f8fafc; font-size: 10px;">
+                <div style="font-weight: 900; margin-bottom: 4px; text-align: center; color: #0f172a;">📋 كشف حساب العميل الآجل</div>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td>الرصيد السابق:</td><td style="text-align: left; font-weight: bold;">{PrinterService._money(prev_balance)}</td></tr>
+                    <tr><td>قيمة الفاتورة الحالية:</td><td style="text-align: left; font-weight: bold;">{PrinterService._money(current_invoice_total)}</td></tr>
+                    <tr style="border-top: 1px solid #cbd5e1; font-weight: 900;"><td>إجمالي الرصيد المستحق:</td><td style="text-align: left; color: #dc2626;">{PrinterService._money(total_balance_due)}</td></tr>
+                </table>
+            </div>
+            """
+
         html = f"""
         <!DOCTYPE html>
         <html dir="rtl" lang="ar">
@@ -497,8 +516,8 @@ class PrinterService:
                 <table class="items-table">
                     <thead>
                         <tr>
-                            <th style="width: 68%; text-align: right;">الصنف</th>
-                            <th style="width: 32%; text-align: left;">الإجمالي</th>
+                            <th style="width: 78%; text-align: right; padding: 4px 1px; font-size: 9.5px;">الصنف</th>
+                            <th style="width: 22%; text-align: left; padding: 4px 1px; font-size: 9.5px;">الإجمالي</th>
                         </tr>
                     </thead>
                     <tbody>{rows}</tbody>
@@ -517,6 +536,7 @@ class PrinterService:
                         </tr>
                         {tendered_html}
                     </table>
+                    {credit_statement_html}
                 </div>
 
                 <div class="footer">

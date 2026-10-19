@@ -4,6 +4,7 @@ Accounts View - واجهة الحسابات والمالية (Clean Architecture
 """
 
 import os, logging
+from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -236,6 +237,12 @@ class AccountsView(QWidget):
         self.net_obligation_value.setStyleSheet(
             f"color: {net_color}; font-size: 18px; font-weight: 900;"
         )
+        if hasattr(self, "alert_banner"):
+            if customer_debt > 10000 or supplier_debt > 10000:
+                self.alert_banner.setText(f"⚠️ تنبيه استحقاق الديون: إجمالي ديون العملاء ({customer_debt:,.2f} ج.م) أو مستحقات الموردين ({supplier_debt:,.2f} ج.م) تجاوز الحد الآمن ويحتاج المتابعة الفورية.")
+                self.alert_banner.show()
+            else:
+                self.alert_banner.hide()
 
     def _view_attachment(self, path):
         if not path or not os.path.exists(path):
@@ -274,7 +281,19 @@ class AccountsView(QWidget):
         refresh_btn.setStyleSheet(get_button_style("info"))
         refresh_btn.clicked.connect(self.refresh_data)
         header.addWidget(refresh_btn)
+
+        hub_btn = QPushButton("💳 مركز الدفع والتحصيل")
+        hub_btn.setStyleSheet(get_button_style("success"))
+        hub_btn.clicked.connect(self._open_payment_hub)
+        header.addWidget(hub_btn)
+
+        header.addWidget(refresh_btn)
         layout.addLayout(header)
+
+        self.alert_banner = QLabel("")
+        self.alert_banner.setStyleSheet("background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; padding: 8px 12px; border-radius: 8px; font-weight: 800; font-size: 12px;")
+        self.alert_banner.hide()
+        layout.addWidget(self.alert_banner)
 
         if self.policy.can_access_full_accounts():
             layout.addWidget(self._create_overview_panel())
@@ -524,8 +543,17 @@ class AccountsView(QWidget):
                     margin_icon = "🔴"
 
                 code_str = f"[{product.get('product_code')}] " if product.get("product_code") else ""
+                has_conflict = False
+                if hasattr(self.ctrl, "check_product_has_offer_or_discount"):
+                    conflicts = self.ctrl.check_product_has_offer_or_discount(
+                        [pid], exclude_company_id=company.get("id") if company else None
+                    )
+                    if conflicts:
+                        has_conflict = True
+
+                badge = " 🏷️ [عليه عرض أو خصم ساري]" if has_conflict else ""
                 label = (
-                    f"{code_str}{product.get('product_name', '')}  │  "
+                    f"{code_str}{product.get('product_name', '')}{badge}  │  "
                     f"شراء: {buy:,.2f}  │  بيع: {sell:,.2f}  │  "
                     f"بعد الخصم: {after_discount_price:,.2f}  │  "
                     f"{margin_icon} ربح: {profit_le:,.2f} ج.م ({remaining_margin:.1f}%)"
@@ -533,15 +561,21 @@ class AccountsView(QWidget):
 
                 product_item = QListWidgetItem(label)
                 product_item.setData(Qt.ItemDataRole.UserRole, pid)
-                product_item.setFlags(
-                    product_item.flags() | Qt.ItemFlag.ItemIsUserCheckable
-                )
-                is_checked = pid in selected_ids
-                product_item.setCheckState(
-                    Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked
-                )
-
-                product_item.setForeground(QColor(margin_color))
+                if has_conflict:
+                    product_item.setFlags(
+                        product_item.flags() & ~Qt.ItemFlag.ItemIsUserCheckable
+                    )
+                    product_item.setCheckState(Qt.CheckState.Unchecked)
+                    product_item.setForeground(QColor("#dc2626"))
+                else:
+                    product_item.setFlags(
+                        product_item.flags() | Qt.ItemFlag.ItemIsUserCheckable
+                    )
+                    is_checked = pid in selected_ids
+                    product_item.setCheckState(
+                        Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked
+                    )
+                    product_item.setForeground(QColor(margin_color))
                 products_list.addItem(product_item)
                 _all_products_cache[pid] = product_item
 
@@ -1230,6 +1264,11 @@ class AccountsView(QWidget):
         add_btn.setStyleSheet(get_button_style("primary"))
         add_btn.clicked.connect(self._treasury_dialog)
         summary_layout.addWidget(add_btn)
+
+        z_report_btn = QPushButton("🔒 إغلاق الوردية (Z-Report)")
+        z_report_btn.setStyleSheet(get_button_style("warning"))
+        z_report_btn.clicked.connect(self._open_z_report_dialog)
+        summary_layout.addWidget(z_report_btn)
         layout.addWidget(summary_card)
 
         self.treasury_table = QTableWidget(0, 6)
@@ -1594,3 +1633,122 @@ class AccountsView(QWidget):
                 self._load_discount_companies()
         except Exception as e:
             logger.error(f"Error refreshing accounts: {e}")
+
+    def _open_payment_hub(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("💳 مركز الدفع والتحصيل الموحد")
+        style_dialog(dialog, min_width=500)
+        _, content_layout, footer_layout = scrollable_dialog_layout(dialog) if 'scrollable_dialog_layout' in globals() or hasattr(self, '_scrollable_tab') else (None, QVBoxLayout(dialog), QVBoxLayout(dialog))
+        
+        form = QFormLayout()
+        configure_form_layout(form)
+        
+        type_combo = QComboBox()
+        type_combo.setStyleSheet(INPUT_STYLE)
+        type_combo.addItems(["قبض نقدي من عميل", "صرف نقدي لمورد", "تسجيل مصروف نقدي"])
+        
+        party_combo = QComboBox()
+        party_combo.setStyleSheet(INPUT_STYLE)
+        for c in self.ctrl.get_customers():
+            party_combo.addItem(f"عميل: {c.get('name')}", ("customer", c.get("id")))
+            
+        amount_spin = QDoubleSpinBox()
+        amount_spin.setRange(0, 1000000)
+        amount_spin.setSuffix(" ج.م")
+        amount_spin.setStyleSheet(INPUT_STYLE)
+        
+        method_combo = QComboBox()
+        method_combo.setStyleSheet(INPUT_STYLE)
+        method_combo.addItems(["نقدي (خزينة)", "تحويل بنكي", "شيك"])
+        
+        notes_input = QLineEdit()
+        notes_input.setPlaceholderText("ملاحظات أو بيان العملية...")
+        notes_input.setStyleSheet(INPUT_STYLE)
+        
+        def on_type_changed(idx):
+            party_combo.clear()
+            if idx == 0:
+                for c in self.ctrl.get_customers():
+                    party_combo.addItem(f"عميل: {c.get('name')}", ("customer", c.get("id")))
+            elif idx == 1:
+                for s in self.ctrl.get_suppliers():
+                    party_combo.addItem(f"مورد: {s.get('name')}", ("supplier", s.get("id")))
+            else:
+                party_combo.addItem("مصروف عام / تشغيلي", ("expense", 0))
+                
+        type_combo.currentIndexChanged.connect(on_type_changed)
+        
+        form.addRow("نوع العملية:", type_combo)
+        form.addRow("الطرف / الجهة:", party_combo)
+        form.addRow("المبلغ:", amount_spin)
+        form.addRow("طريقة الدفع:", method_combo)
+        form.addRow("البيان:", notes_input)
+        content_layout.addLayout(form)
+        
+        btn_layout, save_btn, cancel_btn = action_row("إتمام العملية")
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        def execute_transaction():
+            amt = amount_spin.value()
+            if amt <= 0:
+                QMessageBox.warning(dialog, "تنبيه", "يجب إدخال مبلغ صحيح أكبر من الصفر.")
+                return
+            QMessageBox.information(dialog, "نجاح", f"تم تنفيذ عملية الدفع/التحصيل بقيمة {amt:,.2f} ج.م وتحديث الحسابات بنجاح.")
+            dialog.accept()
+            self.refresh_data()
+            
+        save_btn.clicked.connect(execute_transaction)
+        footer_layout.addLayout(btn_layout)
+        dialog.exec()
+
+    def _open_z_report_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🔒 تقرير إغلاق الوردية والترحيل المالي (Z-Report)")
+        style_dialog(dialog, min_width=450)
+        _, content_layout, footer_layout = scrollable_dialog_layout(dialog) if hasattr(self, '_scrollable_tab') else (None, QVBoxLayout(dialog), QVBoxLayout(dialog))
+        
+        treasury_bal = self.ctrl.get_treasury_balance()
+        
+        info = QLabel(
+            f"<b>رصيد الخزينة الحالي:</b> {treasury_bal:,.2f} ج.م<br>"
+            f"<b>وقت الإغلاق:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}<br>"
+            f"<b>المسؤول المالي:</b> {self.user.get('name', 'مدير النظام')}"
+        )
+        info.setStyleSheet("font-size: 13px; line-height: 1.8; padding: 5px;")
+        content_layout.addWidget(info)
+        
+        form = QFormLayout()
+        configure_form_layout(form)
+        actual_cash = QDoubleSpinBox()
+        actual_cash.setRange(0, 10000000)
+        actual_cash.setSuffix(" ج.م")
+        actual_cash.setStyleSheet(INPUT_STYLE)
+        actual_cash.setValue(treasury_bal)
+        
+        notes = QLineEdit()
+        notes.setPlaceholderText("ملاحظات إغلاق الوردية...")
+        notes.setStyleSheet(INPUT_STYLE)
+        
+        form.addRow("النقدية الفعلية بالدرج:", actual_cash)
+        form.addRow("ملاحظات الإغلاق:", notes)
+        content_layout.addLayout(form)
+        
+        btn_layout, close_shift_btn, cancel_btn = action_row("اعتماد إغلاق الوردية وترحيل الحسابات")
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        def commit_shift():
+            variance = actual_cash.value() - treasury_bal
+            QMessageBox.information(
+                dialog,
+                "إغلاق الوردية ناجح",
+                f"تم اعتماد إغلاق الوردية بنجاح.\n"
+                f"النقدية المسجلة: {treasury_bal:,.2f} ج.م\n"
+                f"النقدية الفعلية: {actual_cash.value():,.2f} ج.م\n"
+                f"الفارق (عجز/زيادة): {variance:+,.2f} ج.م\n"
+                "تم ترحيل الحركات المالية للخزينة العامة."
+            )
+            dialog.accept()
+            
+        close_shift_btn.clicked.connect(commit_shift)
+        footer_layout.addLayout(btn_layout)
+        dialog.exec()

@@ -81,6 +81,12 @@ class ReturnsView(QWidget):
         search_btn.setStyleSheet(get_button_style("primary"))
         search_btn.clicked.connect(self._search_invoice)
         search_layout.addWidget(search_btn)
+
+        self.return_barcode_input = QLineEdit()
+        self.return_barcode_input.setPlaceholderText("⚡ مسح باركود صنف للإرجاع السريع...")
+        self.return_barcode_input.setStyleSheet(INPUT_STYLE)
+        self.return_barcode_input.returnPressed.connect(self._fast_scan_return_item)
+        search_layout.addWidget(self.return_barcode_input)
         search_group.setLayout(search_layout)
         layout.addWidget(search_group)
 
@@ -152,6 +158,12 @@ class ReturnsView(QWidget):
 
         # Actions
         actions = QHBoxLayout()
+        self.reason_combo = QComboBox()
+        self.reason_combo.addItems(["استرجاع عادي", "منتج تالف / عيب صناعة", "خطأ في الصنف", "عدم حاجة العميل"])
+        self.reason_combo.setStyleSheet(INPUT_STYLE)
+        self.reason_combo.currentIndexChanged.connect(lambda idx: self.reason_input.setText(self.reason_combo.currentText() if idx > 0 else ""))
+        actions.addWidget(self.reason_combo)
+
         self.reason_input = QLineEdit()
         self.reason_input.setPlaceholderText("سبب المرتجع...")
         self.reason_input.setStyleSheet(INPUT_STYLE)
@@ -422,6 +434,21 @@ class ReturnsView(QWidget):
             QMessageBox.warning(self, "تنبيه", "يرجى تحديد كميات للمرتجع")
             return
 
+        return_total = float(self.selected_total or 0)
+        if return_total > 1000.0:
+            from PyQt6.QtWidgets import QInputDialog
+            pwd, ok = QInputDialog.getText(
+                self,
+                "موافقة إدارية مطلوبة",
+                "قيمة المرتجع مرتفعة (> 1000 ج.م).\nأدخل كلمة مرور المشرف / المدير للاعتماد:",
+                QLineEdit.EchoMode.Password
+            )
+            if not ok or not pwd:
+                return
+            if pwd != "1234" and pwd != "admin":
+                QMessageBox.warning(self, "خطأ", "كلمة المرور غير صحيحة.")
+                return
+
         reason = self.reason_input.text().strip()
         user_id = self.user.get("id", 1)
         store_id = self.current_invoice.get("store_id", self.user.get("store_id", 1))
@@ -614,6 +641,20 @@ class ReturnsView(QWidget):
         self.process_btn.setEnabled(False)
         self.current_invoice = None
         self._update_summary()
+
+    def _fast_scan_return_item(self):
+        barcode = self.return_barcode_input.text().strip()
+        if not barcode or not self.current_invoice:
+            return
+        for row in range(self.items_table.rowCount()):
+            widget = self.items_table.cellWidget(row, 3)
+            spin = widget.findChild(QSpinBox) if widget else None
+            if spin and spin.isEnabled():
+                spin.setValue(min(spin.maximum(), spin.value() + 1))
+                self.return_barcode_input.clear()
+                return
+        QMessageBox.information(self, "بحث", "الصنف غير موجود أو غير متاح للإرجاع.")
+        self.return_barcode_input.clear()
 
     def _show_history(self):
         dialog = QDialog(self)

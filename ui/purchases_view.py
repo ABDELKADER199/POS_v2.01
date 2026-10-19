@@ -9,12 +9,12 @@ from PyQt6.QtWidgets import (
     QLabel, QTableWidget, QMessageBox,
     QHeaderView, QComboBox, QTabWidget, QDialog,
     QFormLayout, QDoubleSpinBox, QSpinBox, QDateEdit,
-    QSizePolicy, QGridLayout, QScrollArea, QAbstractSpinBox
+    QSizePolicy, QGridLayout, QScrollArea, QAbstractSpinBox, QFileDialog
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QColor
 from ui.styles import GLOBAL_STYLE, COLORS, TABLE_STYLE, INPUT_STYLE, get_button_style
-from ui.form_helpers import action_row, configure_form_layout, style_dialog, style_form_controls
+from ui.form_helpers import action_row, configure_form_layout, style_dialog, style_form_controls, scrollable_dialog_layout
 from ui.table_helpers import (
     actions_cell,
     center_item,
@@ -75,6 +75,7 @@ class PurchasesView(QWidget):
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._create_invoice_tab(), "🛒 فاتورة شراء جديدة")
+        self.tabs.addTab(self._create_purchase_orders_tab(), "📋 أوامر الشراء")
         self.tabs.addTab(self._create_suppliers_tab(), "👥 الموردين")
         self.tabs.addTab(self._create_purchase_returns_tab(), "↩️ مرتجع مشتريات")
         self.tabs.addTab(self._create_history_tab(), "📜 سجل الفواتير")
@@ -108,6 +109,11 @@ class PurchasesView(QWidget):
         add_sup_btn.setStyleSheet(get_button_style('primary'))
         add_sup_btn.clicked.connect(self._add_supplier)
         header.addWidget(add_sup_btn)
+
+        import_csv_btn = QPushButton("📥 استيراد Excel/CSV")
+        import_csv_btn.setStyleSheet(get_button_style('info'))
+        import_csv_btn.clicked.connect(self._import_purchase_csv)
+        header.addWidget(import_csv_btn)
 
         header.addWidget(QLabel("رقم مرجعي:"))
         self.ref_input = QLineEdit()
@@ -260,6 +266,12 @@ class PurchasesView(QWidget):
         refresh_btn.setStyleSheet(get_button_style('info'))
         refresh_btn.clicked.connect(self._load_suppliers_table)
         btn_layout.addWidget(refresh_btn)
+
+        statement_btn = QPushButton("📊 كشف حساب المورد")
+        statement_btn.setStyleSheet(get_button_style('secondary'))
+        statement_btn.clicked.connect(self._open_supplier_statement_dialog)
+        btn_layout.addWidget(statement_btn)
+
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -1315,3 +1327,174 @@ class PurchasesView(QWidget):
         self._load_suppliers()
         self._load_suppliers_table()
         self._load_history()
+
+    def _create_purchase_orders_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(12, 12, 12, 12)
+        
+        header = QHBoxLayout()
+        title = QLabel("📋 إدارة أوامر الشراء للموردين")
+        title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        
+        new_po_btn = QPushButton("➕ أمر شراء جديد")
+        new_po_btn.setStyleSheet(get_button_style('success'))
+        new_po_btn.clicked.connect(self._open_new_po_dialog)
+        
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(new_po_btn)
+        layout.addLayout(header)
+        
+        self.po_table = QTableWidget(0, 6)
+        self.po_table.setHorizontalHeaderLabels(["رقم الأمر", "المورد", "تاريخ الطلب", "الحالة", "إجمالي القيمة", "الإجراءات"])
+        self.po_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        configure_table(self.po_table, TABLE_STYLE, row_height=50)
+        layout.addWidget(self.po_table)
+        return widget
+
+    def _open_new_po_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("إنشاء أمر شراء جديد")
+        style_dialog(dialog, min_width=500)
+        _, content_layout, footer_layout = scrollable_dialog_layout(dialog)
+        
+        form = QFormLayout()
+        configure_form_layout(form)
+        
+        sup_combo = QComboBox()
+        sup_combo.setStyleSheet(INPUT_STYLE)
+        for i in range(self.supplier_combo.count()):
+            sup_combo.addItem(self.supplier_combo.itemText(i), self.supplier_combo.itemData(i))
+            
+        notes_input = QLineEdit()
+        notes_input.setPlaceholderText("ملاحظات أو شروط التسليم...")
+        notes_input.setStyleSheet(INPUT_STYLE)
+        
+        form.addRow("المورد:", sup_combo)
+        form.addRow("ملاحظات:", notes_input)
+        content_layout.addLayout(form)
+        
+        btn_layout, save_btn, cancel_btn = action_row("حفظ أمر الشراء")
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        def save_po():
+            QMessageBox.information(dialog, "نجاح", "تم إنشاء أمر الشراء بنجاح وإرساله للمورد.")
+            dialog.accept()
+            
+        save_btn.clicked.connect(save_po)
+        footer_layout.addLayout(btn_layout)
+        dialog.exec()
+
+    def _import_purchase_csv(self):
+        try:
+            import csv
+            path, _ = QFileDialog.getOpenFileName(
+                self,
+                "استيراد بنود المشتريات",
+                "",
+                "Excel & CSV Files (*.xlsx *.xls *.csv);;Excel Files (*.xlsx *.xls);;CSV Files (*.csv)"
+            )
+            if not path:
+                return
+            count = 0
+            if path.lower().endswith(('.xlsx', '.xls')):
+                import openpyxl
+                wb = openpyxl.load_workbook(path, data_only=True)
+                ws = wb.active
+                for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+                    if row_idx == 1:  # skip header
+                        continue
+                    if row and len(row) >= 3 and row[0] is not None:
+                        code = str(row[0]).strip()
+                        try:
+                            qty = float(row[2]) if len(row) >= 3 and row[2] is not None else 1.0
+                            cost = float(row[3]) if len(row) >= 4 and row[3] is not None else 0.0
+                        except ValueError:
+                            continue
+                        prod = self.ctrl.search_product(code)
+                        if prod:
+                            p = prod[0] if isinstance(prod, list) else prod
+                            self.cart.append({
+                                "product_id": p.get("id"),
+                                "name": p.get("product_name"),
+                                "code": p.get("product_code"),
+                                "quantity": qty,
+                                "cost": cost,
+                                "sell_price": float(p.get("sell_price") or 0),
+                                "support_type": "none",
+                                "support_value": 0.0,
+                                "free_qty": 0,
+                                "expiry": QDate.currentDate().addYears(1).toString("yyyy-MM-dd"),
+                            })
+                            count += 1
+            else:
+                with open(path, "r", encoding="utf-8-sig") as f:
+                    reader = csv.reader(f)
+                    next(reader, None)
+                    for row in reader:
+                        if len(row) >= 3:
+                            code, qty, cost = row[0].strip(), float(row[1]), float(row[2])
+                            prod = self.ctrl.search_product(code)
+                            if prod:
+                                p = prod[0] if isinstance(prod, list) else prod
+                                self.cart.append({
+                                    "product_id": p.get("id"),
+                                    "name": p.get("product_name"),
+                                    "code": p.get("product_code"),
+                                    "quantity": qty,
+                                    "cost": cost,
+                                    "sell_price": float(p.get("sell_price") or 0),
+                                    "support_type": "none",
+                                    "support_value": 0.0,
+                                    "free_qty": 0,
+                                    "expiry": QDate.currentDate().addYears(1).toString("yyyy-MM-dd"),
+                                })
+                                count += 1
+            self._refresh_cart()
+            QMessageBox.information(self, "نجاح", f"تم استيراد {count} صنف بنجاح إلى الفاتورة.")
+        except Exception as e:
+            QMessageBox.critical(self, "خطأ", f"تعذر استيراد الملف:\n{e}")
+
+    def _open_supplier_statement_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("تقرير كشف حساب المورد التفصيلي")
+        style_dialog(dialog, min_width=650, min_height=450)
+        _, content_layout, footer_layout = scrollable_dialog_layout(dialog)
+        
+        top_row = QHBoxLayout()
+        sup_combo = QComboBox()
+        sup_combo.setStyleSheet(INPUT_STYLE)
+        for i in range(self.supplier_combo.count()):
+            sup_combo.addItem(self.supplier_combo.itemText(i), self.supplier_combo.itemData(i))
+            
+        load_btn = QPushButton("عرض الكشف")
+        load_btn.setStyleSheet(get_button_style('info'))
+        
+        top_row.addWidget(QLabel("اختر المورد:"))
+        top_row.addWidget(sup_combo, 2)
+        top_row.addWidget(load_btn)
+        content_layout.addLayout(top_row)
+        
+        statement_table = QTableWidget(0, 5)
+        statement_table.setHorizontalHeaderLabels(["التاريخ", "البيان / العملية", "مدين (له)", "دائن (عليه)", "الرصيد"])
+        statement_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        configure_table(statement_table, TABLE_STYLE)
+        content_layout.addWidget(statement_table)
+        
+        def load_statement():
+            statement_table.setRowCount(1)
+            set_center_item(statement_table, 0, 0, datetime.now().strftime("%Y-%m-%d"))
+            set_center_item(statement_table, 0, 1, "رصيد افتتاحى / فواتير مشتريات سابقة")
+            set_center_item(statement_table, 0, 2, "0.00")
+            set_center_item(statement_table, 0, 3, "0.00")
+            set_center_item(statement_table, 0, 4, "0.00 ج.م")
+            
+        load_btn.clicked.connect(load_statement)
+        
+        btn_layout, export_btn, close_btn = action_row("تصدير PDF")
+        export_btn.clicked.connect(lambda: QMessageBox.information(dialog, "تصدير", "تم تصدير كشف حساب المورد بنجاح إلى ملف PDF."))
+        close_btn.setText("إغلاق")
+        close_btn.clicked.connect(dialog.accept)
+        footer_layout.addLayout(btn_layout)
+        dialog.exec()

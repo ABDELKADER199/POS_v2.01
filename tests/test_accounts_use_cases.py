@@ -233,6 +233,12 @@ class FakeAccountsRepository:
         self.calls.append(("rollback",))
         self.rolled_back = True
 
+    def get_product_ids_for_target(self, apply_to: str, apply_to_id=None):
+        return getattr(self, "target_product_ids", [1])
+
+    def check_product_has_offer_or_discount(self, product_ids, exclude_promo_id=None, exclude_company_id=None):
+        return getattr(self, "mock_conflicts", [])
+
 
 class FakeCatalogService:
     def __init__(self, result=None, error=None):
@@ -540,3 +546,24 @@ def test_discount_companies_crud_validation_and_transaction_boundaries():
     listing = use_case.list()
     assert len(listing) == 1
     assert listing[0]["product_ids"] == [10, 20]
+
+
+def test_cannot_apply_discount_or_promotion_on_item_with_offer_or_discount():
+    repo = FakeAccountsRepository()
+    repo.mock_conflicts = ["المنتج 'تفاح' لديه عرض نشط بالفعل ('عرض الصيف')"]
+    use_case = PromotionsUseCase(repo)
+
+    ok = use_case.add(
+        name="عرض جديد",
+        promo_type="percentage",
+        value=10.0,
+        min_quantity=1,
+        buy_quantity=1,
+        apply_to="product",
+        apply_to_id=1,
+        start_date="2026-10-01",
+        end_date="2026-10-31",
+    )
+    assert ok is False
+    assert repo.rolled_back is True
+    assert "لا يمكن تطبيق عرض على صنف عليه عرض أو خصم فعلي بالفعل" in use_case.last_error

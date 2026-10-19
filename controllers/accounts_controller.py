@@ -46,6 +46,7 @@ class AccountsController:
     def delete_discount_company(self, *args, **kwargs): return self.service.delete_discount_company(*args, **kwargs)
     def get_last_discount_company_error(self, *args, **kwargs): return self.service.get_last_discount_company_error(*args, **kwargs)
     def search_discount_eligible_products(self, *args, **kwargs): return self.service.search_discount_eligible_products(*args, **kwargs)
+    def check_product_has_offer_or_discount(self, *args, **kwargs): return self.service.check_product_has_offer_or_discount(*args, **kwargs)
     def create_customer_account_pdf(self, *args, **kwargs): return self.service.create_customer_account_pdf(*args, **kwargs)
     def create_debt_aging_pdf(self, *args, **kwargs): return self.service.create_debt_aging_pdf(*args, **kwargs)
     def create_ledger_pdf(self, *args, **kwargs): return self.service.create_ledger_pdf(*args, **kwargs)

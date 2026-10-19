@@ -143,6 +143,14 @@ class AdminView(QWidget):
         add_btn.setStyleSheet(get_button_style('success'))
         add_btn.clicked.connect(self._add_user)
         btn_layout.addWidget(add_btn)
+        
+        search_box = QLineEdit()
+        search_box.setPlaceholderText("🔍 بحث بالاسم أو البريد...")
+        search_box.setFixedWidth(250)
+        search_box.setStyleSheet(GLOBAL_STYLE)
+        search_box.textChanged.connect(self._filter_users)
+        btn_layout.addWidget(search_box)
+
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -185,6 +193,17 @@ class AdminView(QWidget):
             a_layout.addWidget(del_btn)
 
             self.users_table.setCellWidget(row, 6, actions)
+
+    def _filter_users(self, text):
+        term = text.strip().lower()
+        for row in range(self.users_table.rowCount()):
+            match = False
+            for col in range(1, 6):
+                item = self.users_table.item(row, col)
+                if item and term in item.text().lower():
+                    match = True
+                    break
+            self.users_table.setRowHidden(row, not match if term else False)
 
     def _add_user(self):
         self._show_user_dialog()
@@ -259,6 +278,14 @@ class AdminView(QWidget):
             if not name or not email:
                 QMessageBox.warning(dialog, "تنبيه", "الاسم والبريد مطلوبان")
                 return
+
+            if password:
+                if len(password) < 8:
+                    QMessageBox.warning(dialog, "تنبيه أمني", "كلمة المرور ضعيفة:\nيجب ألا تقل عن 8 أحرف.")
+                    return
+                if not any(c.isdigit() for c in password) or not any(c.isalpha() for c in password):
+                    QMessageBox.warning(dialog, "تنبيه أمني", "كلمة المرور ضعيفة:\nيجب أن تحتوي على حروف وأرقام على الأقل.")
+                    return
 
             # Check for existing inactive user
             if not user:
@@ -1001,11 +1028,22 @@ class AdminView(QWidget):
         title = QLabel("📝 سجل المراقبة والتدقيق")
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
         
+        search_box = QLineEdit()
+        search_box.setPlaceholderText("🔍 بحث في سجل التدقيق...")
+        search_box.setFixedWidth(250)
+        search_box.setStyleSheet(GLOBAL_STYLE)
+        search_box.textChanged.connect(self._filter_audit_logs)
+
+        export_btn = self._make_table_button("📤 تصدير CSV", "success")
+        export_btn.clicked.connect(self._export_audit_logs_csv)
+
         refresh_btn = self._make_table_button("🔄 تحديث", "info")
         refresh_btn.clicked.connect(self._load_audit_logs)
         
         header_layout.addWidget(title)
         header_layout.addStretch()
+        header_layout.addWidget(search_box)
+        header_layout.addWidget(export_btn)
         header_layout.addWidget(refresh_btn)
         
         layout.addLayout(header_layout)
@@ -1095,3 +1133,34 @@ class AdminView(QWidget):
         msg.setDetailedText(formatted_details)
         msg.setIcon(QMessageBox.Icon.Information)
         msg.exec()
+
+    def _filter_audit_logs(self, text):
+        term = text.strip().lower()
+        for row in range(self.audit_table.rowCount()):
+            match = False
+            for col in range(self.audit_table.columnCount()):
+                item = self.audit_table.item(row, col)
+                if item and term in item.text().lower():
+                    match = True
+                    break
+            self.audit_table.setRowHidden(row, not match if term else False)
+
+    def _export_audit_logs_csv(self):
+        try:
+            import csv
+            from PyQt6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getSaveFileName(self, "تصدير سجل التدقيق", "audit_logs.csv", "CSV Files (*.csv)")
+            if not path:
+                return
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                headers = [self.audit_table.horizontalHeaderItem(i).text() for i in range(self.audit_table.columnCount())]
+                writer.writerow(headers)
+                for row in range(self.audit_table.rowCount()):
+                    if self.audit_table.isRowHidden(row):
+                        continue
+                    row_data = [self.audit_table.item(row, col).text() if self.audit_table.item(row, col) else "" for col in range(self.audit_table.columnCount())]
+                    writer.writerow(row_data)
+            QMessageBox.information(self, "نجاح", f"تم تصدير سجل التدقيق بنجاح إلى:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "خطأ", f"تعذر تصدير الملف:\n{e}")

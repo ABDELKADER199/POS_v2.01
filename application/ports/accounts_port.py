@@ -91,6 +91,15 @@ class AccountsRepositoryPort(Protocol):
         self, apply_to: str, apply_to_id=None
     ) -> List[Dict]: ...
 
+    def get_product_ids_for_target(self, apply_to: str, apply_to_id=None) -> List[int]: ...
+
+    def check_product_has_offer_or_discount(
+        self,
+        product_ids: List[int],
+        exclude_promo_id: int = None,
+        exclude_company_id: int = None,
+    ) -> List[str]: ...
+
     def insert_promotion(
         self,
         name,

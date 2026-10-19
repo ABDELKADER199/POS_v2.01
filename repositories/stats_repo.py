@@ -650,3 +650,128 @@ class StatsRepository(BaseRepository):
               AND COALESCE(store_type, 'Branch') != 'GM'
             ORDER BY store_name
         """)
+
+    # ── Discounts & Promotions Stats ───────────────────
+    def _columns(self, table_name: str) -> set:
+        try:
+            rows = self._fetch_all(f"SHOW COLUMNS FROM `{table_name}`")
+            return {row.get("Field") or row.get("field") for row in rows}
+        except Exception:
+            return set()
+
+    def get_discounts_summary(self, date_from: str, date_to: str, store_id: int = None) -> Dict:
+        try:
+            store_filter = "AND i.store_id = %s" if store_id else ""
+            params = [date_from, date_to]
+            if store_id:
+                params.append(store_id)
+            
+            invoice_cols = self._columns("invoices")
+            has_company_disc = "company_discount_amount" in invoice_cols
+            company_col_sql = "COALESCE(SUM(i.company_discount_amount), 0)" if has_company_disc else "0"
+
+            row = self._fetch_one(f"""
+                SELECT
+                    COALESCE(SUM(ii.discount), 0) as items_discount,
+                    {company_col_sql} as company_discount
+                FROM invoices i
+                LEFT JOIN invoice_items ii ON i.id = ii.invoice_id
+                WHERE i.status = 'Completed'
+                  AND DATE(i.invoice_date) BETWEEN %s AND %s
+                  {store_filter}
+            """, tuple(params))
+            
+            items_disc = float(row.get("items_discount", 0) or 0) if row else 0.0
+            comp_disc = float(row.get("company_discount", 0) or 0) if row else 0.0
+            
+            return {
+                "manual_discount": max(0.0, items_disc - comp_disc),
+                "promo_discount": 0.0,
+                "company_discount": comp_disc,
+                "total_discounts": items_disc,
+            }
+        except Exception as e:
+            logger.error(f"Error fetching discounts summary: {e}")
+            return {
+                "manual_discount": 0.0,
+                "promo_discount": 0.0,
+                "company_discount": 0.0,
+                "total_discounts": 0.0,
+            }
+
+    def get_discount_breakdown_details(self, date_from: str, date_to: str, store_id: int = None) -> List[Dict]:
+        try:
+            store_filter = "AND i.store_id = %s" if store_id else ""
+            params = [date_from, date_to]
+            if store_id:
+                params.append(store_id)
+
+            breakdown = []
+            summary = self.get_discounts_summary(date_from, date_to, store_id)
+            total_items_disc = float(summary.get("total_discounts", 0) or 0.0)
+            company_disc = float(summary.get("company_discount", 0) or 0.0)
+
+            # 1. Company discounts by company name
+            try:
+                invoice_cols = self._columns("invoices")
+                if "discount_company_name" in invoice_cols and "company_discount_amount" in invoice_cols:
+                    comp_rows = self._fetch_all(f"""
+                        SELECT discount_company_name as company_name, COALESCE(SUM(company_discount_amount), 0) as total
+                        FROM invoices i
+                        WHERE i.status = 'Completed'
+                          AND DATE(i.invoice_date) BETWEEN %s AND %s
+                          AND discount_company_name IS NOT NULL
+                          AND discount_company_name != ''
+                          {store_filter}
+                        GROUP BY discount_company_name
+                    """, tuple(params))
+                    for r in comp_rows:
+                        cname = r.get("company_name") or "شركة خصم"
+                        amount = float(r.get("total", 0) or 0)
+                        if amount > 0:
+                            breakdown.append({
+                                "discount_type": f"خصم شركة: {cname}",
+                                "amount": amount,
+                                "description": f"خصم شركة الخصم المعتمدة '{cname}'",
+                            })
+            except Exception as e:
+                logger.debug(f"Company discount breakdown query info: {e}")
+
+            remaining_items_disc = max(0.0, total_items_disc - company_disc)
+
+            # 2. Promotions / Magazine offers from active promotions table
+            try:
+                active_promos = self._fetch_all("""
+                    SELECT name FROM promotions
+                    WHERE is_active = TRUE
+                      AND (start_date <= %s AND end_date >= %s)
+                    ORDER BY id DESC
+                    LIMIT 3
+                """, (date_to, date_from))
+
+                if active_promos and remaining_items_disc > 0 and len(active_promos) == 0:
+                    pass
+                # If there is remaining item discount and active promotions, attribute promotional portion or keep manual
+                # In this case, if remaining items disc is manual discount:
+                if remaining_items_disc > 0:
+                    breakdown.append({
+                        "discount_type": "الخصم اليدوي المباشر",
+                        "amount": round(remaining_items_disc, 2),
+                        "description": "الخصومات المباشرة والمخصصة على الفواتير أو الأصناف",
+                    })
+            except Exception:
+                if remaining_items_disc > 0:
+                    breakdown.append({
+                        "discount_type": "الخصم اليدوي المباشر",
+                        "amount": round(remaining_items_disc, 2),
+                        "description": "الخصومات المباشرة والمخصصة على الفواتير أو الأصناف",
+                    })
+
+            return breakdown or [{
+                "discount_type": "لا توجد خصومات مسجلة",
+                "amount": 0.0,
+                "description": "لا توجد خصومات خلال هذه الفترة",
+            }]
+        except Exception as e:
+            logger.error(f"Error fetching discount breakdown details: {e}")
+            return []

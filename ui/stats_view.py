@@ -191,6 +191,7 @@ class StatsView(QWidget):
         self.card_inv_val = self._create_card("إجمالي تكلفة البضاعة", "0.00 ج.م", "#6366F1", "📦")
         self.card_paid_total = self._create_card("إجمالي المسدد (للآن)", "0.00 ج.م", "#10B981", "💸")
         self.card_debt_total = self._create_card("إجمالي المديونية (للآن)", "0.00 ج.م", "#F43F5E", "🤝")
+        self.card_discounts = self._create_card("إجمالي الخصومات والعروض", "0.00 ج.م", "#EAB308", "🏷️")
 
         self.metrics_grid.addWidget(self.card_sales, 0, 0)
         self.metrics_grid.addWidget(self.card_profit, 0, 1)
@@ -207,8 +208,9 @@ class StatsView(QWidget):
         self.metrics_grid.addWidget(self.card_cash_net, 2, 2)
         self.metrics_grid.addWidget(self.card_liquidity, 2, 3)
 
-        self.metrics_grid.addWidget(self.card_paid_total, 3, 1)
-        self.metrics_grid.addWidget(self.card_debt_total, 3, 2)
+        self.metrics_grid.addWidget(self.card_paid_total, 3, 0)
+        self.metrics_grid.addWidget(self.card_debt_total, 3, 1)
+        self.metrics_grid.addWidget(self.card_discounts, 3, 2)
 
         self.main_layout.addLayout(self.metrics_grid)
 
@@ -361,6 +363,14 @@ class StatsView(QWidget):
         self.view_sections["تقييم البضاعة بالمخازن"] = c_inventory
         grid.addWidget(c_inventory, 5, 0, 1, 2)
 
+        self.discounts_table = self._create_table(["نوع الخصم / العرض", "إجمالي المبلغ", "الوصف والتفاصيل"])
+        self.discounts_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.discounts_table.itemDoubleClicked.connect(self._on_discount_row_double_clicked)
+        self.store_sales_table.itemDoubleClicked.connect(self._on_store_row_double_clicked)
+        c_discounts = self._wrap_container(self.discounts_table, "🏷️ تفاصيل الخصومات والعروض الترويجية")
+        self.view_sections["تفاصيل الخصومات والعروض"] = c_discounts
+        grid.addWidget(c_discounts, 6, 0, 1, 2)
+
         self.main_layout.addLayout(grid)
 
     # ═══════════════════════════════════════════════════
@@ -457,8 +467,12 @@ class StatsView(QWidget):
         m = data['metrics']
 
         # Update Cards
-        self._update_card(self.card_sales, f"{m.get('total_sales', 0):,.2f} ج.م")
-        self._update_card(self.card_profit, f"{m.get('net_profit', 0):,.2f} ج.م")
+        sales_growth = m.get('sales_growth', 0)
+        profit_growth = m.get('profit_growth', 0)
+        disc_growth = m.get('discounts_growth', 0)
+
+        self._update_card(self.card_sales, f"{m.get('total_sales', 0):,.2f} ج.م\n({sales_growth:+.1f}% مقارنة بالسابقة)")
+        self._update_card(self.card_profit, f"{m.get('net_profit', 0):,.2f} ج.م\n({profit_growth:+.1f}% مقارنة بالسابقة)")
         self._update_card(self.card_atv, f"{m.get('avg_ticket', 0):,.2f} ج.م")
         self._update_card(self.card_margin, f"{m.get('profit_margin', 0):.1f}%")
         self._update_card(self.card_orders, f"{m.get('invoice_count', 0)}")
@@ -474,6 +488,7 @@ class StatsView(QWidget):
         self._update_card(self.card_paid_total, f"{m.get('total_paid', 0):,.2f} ج.م")
         self._update_card(self.card_debt_total, f"{m.get('total_debt', 0):,.2f} ج.م")
         self._update_card(self.card_retention, f"{m.get('retention_rate', 0):.1f}%")
+        self._update_card(self.card_discounts, f"{m.get('total_discounts', 0):,.2f} ج.م\n({disc_growth:+.1f}% مقارنة بالسابقة)")
 
         # Update Graphical Charts
         self.trend_chart.set_data(data['daily_chart'])
@@ -503,6 +518,8 @@ class StatsView(QWidget):
                              
         self._populate_table(self.inventory_table, data.get('inventory_details', []),
                              ['product_code', 'product_name', 'qty', 'buy_price', 'total_product_value'])
+        self._populate_table(self.discounts_table, data.get('discount_breakdown', []),
+                             ['discount_type', 'amount', 'description'])
 
         self._refresh_branch_cards(data['store_sales'])
 
@@ -686,3 +703,32 @@ class StatsView(QWidget):
         self.date_from.setDate(QDate(today.year(), today.month(), 1))
         self.date_to.setDate(QDate(today.year(), today.month(), today.daysInMonth()))
         self.refresh_data()
+
+    def _on_discount_row_double_clicked(self, item):
+        row = item.row()
+        disc_type_item = self.discounts_table.item(row, 0)
+        amount_item = self.discounts_table.item(row, 1)
+        desc_item = self.discounts_table.item(row, 2)
+        if disc_type_item and amount_item:
+            QMessageBox.information(
+                self,
+                "تفاصيل الخصم (Drill-Down)",
+                f"نوع الخصم: {disc_type_item.text()}\n"
+                f"إجمالي المبلغ: {amount_item.text()}\n"
+                f"الوصف والتفاصيل: {desc_item.text() if desc_item else ''}\n\n"
+                "💡 يمكنك مراجعة الفواتير المفصلة عبر تقارير المبيعات وسجل الفواتير."
+            )
+
+    def _on_store_row_double_clicked(self, item):
+        row = item.row()
+        store_item = self.store_sales_table.item(row, 0)
+        sales_item = self.store_sales_table.item(row, 1)
+        invoices_item = self.store_sales_table.item(row, 2)
+        if store_item:
+            QMessageBox.information(
+                self,
+                "تفاصيل أداء الفرع (Drill-Down)",
+                f"الفرع: {store_item.text()}\n"
+                f"إجمالي المبيعات: {sales_item.text() if sales_item else '0'}\n"
+                f"عدد الفواتير: {invoices_item.text() if invoices_item else '0'}"
+            )

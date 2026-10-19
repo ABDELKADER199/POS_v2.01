@@ -91,6 +91,14 @@ class FakeStatsRepository:
             {"id": 2, "store_name": "فرع ثان"},
         ]
 
+    def get_discounts_summary(self, date_from, date_to, store_id=None):
+        self.calls.append(("get_discounts_summary", date_from, date_to, store_id))
+        return {"total_discounts": 50, "manual_discount": 20, "promo_discount": 20, "company_discount": 10}
+
+    def get_discount_breakdown_details(self, date_from, date_to, store_id=None):
+        self.calls.append(("get_discount_breakdown_details", date_from, date_to, store_id))
+        return [{"discount_type": "خصم", "amount": 50, "description": "desc"}]
+
 
 def test_dashboard_stats_builds_metrics_and_charts():
     repo = FakeStatsRepository()

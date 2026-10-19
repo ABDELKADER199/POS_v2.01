@@ -198,6 +198,9 @@ class StatsPdfReportService:
                     {self._table_section("مبيعات الأصناف اليومية", data.get("product_sales_report"), [
                         ("product_code", "الكود"), ("product_name", "الصنف"), ("store_name", "الفرع"), ("sale_date", "التاريخ"), ("total_qty", "الكمية"), ("total_revenue", "الإيراد"), ("total_cost", "التكلفة")
                     ], limit=25)}
+                    {self._table_section("تفاصيل الخصومات والعروض الترويجية", data.get("discount_breakdown"), [
+                        ("discount_type", "نوع الخصم / العرض"), ("amount", "إجمالي المبلغ"), ("description", "الوصف والتفاصيل")
+                    ])}
                 </div>
 
                 <div class="footer">
