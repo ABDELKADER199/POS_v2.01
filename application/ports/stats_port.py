@@ -101,3 +101,10 @@ class StatsRepositoryPort(Protocol):
 
     def get_all_stores(self) -> List[Dict]:
         ...
+
+    def get_discounts_summary(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> Dict:
+        ...
+
+    def get_discount_breakdown_details(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> List[Dict]:
+        ...
+

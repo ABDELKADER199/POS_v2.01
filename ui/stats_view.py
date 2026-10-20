@@ -211,6 +211,7 @@ class StatsView(QWidget):
         self.metrics_grid.addWidget(self.card_paid_total, 3, 0)
         self.metrics_grid.addWidget(self.card_debt_total, 3, 1)
         self.metrics_grid.addWidget(self.card_discounts, 3, 2)
+        self.metrics_grid.addWidget(self.card_retention, 3, 3)
 
         self.main_layout.addLayout(self.metrics_grid)
 
@@ -633,57 +634,24 @@ class StatsView(QWidget):
             menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
 
     def _show_backup(self):
-        import os, subprocess, tempfile
-        from datetime import datetime
+        from controllers.backup_controller import BackupController
         from PyQt6.QtWidgets import QMessageBox
-        
-        try:
-            from repositories.db_connection import DatabaseConnection
-            db = DatabaseConnection()
-            
-            backup_dir = os.path.join(os.getcwd(), 'backups')
-            os.makedirs(backup_dir, exist_ok=True)
-            
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            filepath = os.path.join(backup_dir, f"pos_backup_{timestamp}.sql")
-            
-            mysqldump_path = r"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe"
-            if not os.path.exists(mysqldump_path):
-                mysqldump_path = "mysqldump"
-                
-            defaults_file = None
-            fd, defaults_file = tempfile.mkstemp(prefix="pos_mysql_", suffix=".cnf")
-            with os.fdopen(fd, "w", encoding="utf-8") as config:
-                config.write("[client]\n")
-                config.write(f"host={db.host}\n")
-                config.write(f"port={db.port}\n")
-                config.write(f"user={db.user}\n")
-                if db.password:
-                    config.write(f"password={db.password}\n")
-                config.write("default-character-set=utf8mb4\n")
 
-            cmd = [
-                mysqldump_path,
-                f"--defaults-extra-file={defaults_file}",
-                db.database,
-                f"--result-file={filepath}",
-            ]
-            
+        try:
             self.setCursor(Qt.CursorShape.WaitCursor)
-            try:
-                subprocess.run(cmd, check=True, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-            finally:
-                if defaults_file and os.path.exists(defaults_file):
-                    try:
-                        os.remove(defaults_file)
-                    except OSError:
-                        pass
-            
+            backup_ctrl = BackupController()
+            created_by = self.user_info.get('id', 1) if self.user_info else 1
+            success, message = backup_ctrl.execute_backup(backup_type='manual', created_by=created_by)
             self.setCursor(Qt.CursorShape.ArrowCursor)
-            QMessageBox.information(self, "نجاح", f"تم إنشاء النسخة الاحتياطية بنجاح:\n{filepath}")
+
+            if success:
+                QMessageBox.information(self, "نجاح", f"تم إنشاء النسخة الاحتياطية بنجاح:\n{message}")
+            else:
+                QMessageBox.critical(self, "خطأ", f"فشل إنشاء النسخة الاحتياطية:\n{message}")
         except Exception as e:
             self.setCursor(Qt.CursorShape.ArrowCursor)
-            QMessageBox.critical(self, "خطأ", f"فشل الإنشاء:\n{str(e)}")
+            logger.error("Error executing backup from stats view: %s", e, exc_info=True)
+            QMessageBox.critical(self, "خطأ", f"حدث خطأ أثناء النسخ الاحتياطي:\n{str(e)}")
 
     # ── Filter Presets ────────────────────────────────
 
