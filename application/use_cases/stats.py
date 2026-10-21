@@ -2,16 +2,29 @@ import logging
 from typing import Dict, List, Optional
 
 from application.ports.stats_port import StatsRepositoryPort
+from utils.permissions import PermissionPolicy
 
 logger = logging.getLogger(__name__)
+
+
+class StatsReportError(Exception):
+    """Raised when dashboard stats cannot be retrieved due to a database/repository error."""
 
 
 class DashboardStatsUseCase:
     def __init__(self, repo: StatsRepositoryPort):
         self.repo = repo
 
-    def execute(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> Dict:
+    def execute(self, date_from: str, date_to: str, store_id: Optional[int] = None, user_info: Optional[dict] = None) -> Dict:
         try:
+            can_view_all = True
+            can_view_detailed = True
+            if user_info:
+                policy = PermissionPolicy(user_info)
+                store_id = policy.scoped_store_id(store_id)
+                can_view_all = policy.can_view_all_stats()
+                can_view_detailed = policy.can_view_detailed_stats()
+
             sales = self.repo.get_sales_summary(date_from, date_to, store_id) or {}
             returns = self.repo.get_returns_summary(date_from, date_to, store_id) or {}
             retention = self.repo.get_customer_retention_stats(date_from, date_to, store_id) or {}
@@ -23,10 +36,10 @@ class DashboardStatsUseCase:
 
             inventory_data = self.repo.get_inventory_valuation(store_id)
             inventory_val = inventory_data.get('total_value', 0) if isinstance(inventory_data, dict) else inventory_data
-            inventory_details = inventory_data.get('details', []) if isinstance(inventory_data, dict) else []
+            inventory_details = inventory_data.get('details', []) if (isinstance(inventory_data, dict) and can_view_detailed) else []
 
             discounts_summary = self.repo.get_discounts_summary(date_from, date_to, store_id) or {}
-            discount_breakdown = self.repo.get_discount_breakdown_details(date_from, date_to, store_id) or []
+            discount_breakdown = self.repo.get_discount_breakdown_details(date_from, date_to, store_id) if can_view_detailed else []
 
             from datetime import datetime, timedelta
             try:
@@ -68,14 +81,16 @@ class DashboardStatsUseCase:
                 "top_customers": self.repo.get_top_customers(10, date_from, date_to, store_id),
                 "most_returned": self.repo.get_most_returned_products(10, date_from, date_to, store_id),
                 "return_reasons": self.repo.get_return_reasons(date_from, date_to, store_id),
-                "supplier_stats": self.repo.get_supplier_stats(date_from, date_to),
-                "product_sales_report": self.repo.get_product_sales_report(date_from, date_to, store_id),
+                "supplier_stats": self.repo.get_supplier_stats(date_from, date_to) if can_view_all else [],
+                "product_sales_report": self.repo.get_product_sales_report(date_from, date_to, store_id) if can_view_detailed else [],
                 "inventory_details": inventory_details,
                 "discount_breakdown": discount_breakdown,
             }
+        except StatsReportError:
+            raise
         except Exception as exc:
             logger.error("Error fetching dashboard data: %s", exc, exc_info=True)
-            return self._empty_dashboard()
+            raise StatsReportError(f"تعذر تحميل إحصائيات لوحة القيادة: {exc}") from exc
 
     def _build_metrics(
         self,

@@ -1,5 +1,7 @@
+import pytest
 from application.services.stats_service_facade import StatsServiceFacade
-from application.use_cases.stats import DashboardStatsUseCase, StatsStoresUseCase
+from application.use_cases.stats import DashboardStatsUseCase, StatsStoresUseCase, StatsReportError
+
 
 
 class FakeStatsRepository:
@@ -154,26 +156,36 @@ def test_dashboard_stats_handles_zero_sales_return_rate():
     assert data["metrics"]["return_rate"] == 0
 
 
-def test_dashboard_stats_returns_empty_dashboard_on_repository_error():
+def test_dashboard_stats_raises_error_on_repository_failure():
     repo = FakeStatsRepository()
     repo.fail_on_sales = True
 
-    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31")
+    with pytest.raises(StatsReportError):
+        DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31")
 
-    assert data == {
-        "metrics": {},
-        "daily_chart": [],
-        "hourly_chart": [],
-        "payment_chart": [],
-        "store_sales": [],
-        "top_products": [],
-        "top_customers": [],
-        "most_returned": [],
-        "return_reasons": [],
-        "supplier_stats": [],
-        "product_sales_report": [],
-        "inventory_details": [],
-    }
+
+def test_dashboard_stats_permission_scoping_hides_sensitive_data():
+    repo = FakeStatsRepository()
+    # Cashier user: role_id = 3, store_id = 1
+    cashier_user = {"role_id": 3, "store_id": 1}
+    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info=cashier_user)
+
+    # Cashier does not have can_view_all_stats or can_view_detailed_stats
+    assert data["supplier_stats"] == []
+    assert data["product_sales_report"] == []
+    assert data["inventory_details"] == []
+
+
+def test_stats_service_facade_get_profit_loss_data():
+    repo = FakeStatsRepository()
+    repo.get_net_profit_stats = lambda df, dt, sid: {"net_profit": 500}
+    repo.get_expenses_breakdown = lambda df, dt, sid: [{"expense_type": "إيجار", "total": 200}]
+    
+    service = StatsServiceFacade(repo)
+    pl = service.get_profit_loss_data("2026-05-01", "2026-05-31", store_id=1)
+
+    assert pl["net_profit_stats"] == {"net_profit": 500}
+    assert pl["expenses_breakdown"] == [{"expense_type": "إيجار", "total": 200}]
 
 
 def test_stats_stores_returns_all_stores():

@@ -19,3 +19,7 @@ class StatsController:
     def get_stores(self, *args, **kwargs):
         return self.service.get_stores(*args, **kwargs)
 
+    def get_profit_loss_data(self, *args, **kwargs):
+        return self.service.get_profit_loss_data(*args, **kwargs)
+
+

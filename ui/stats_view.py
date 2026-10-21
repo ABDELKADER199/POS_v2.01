@@ -463,9 +463,15 @@ class StatsView(QWidget):
         if not policy.can_view_all_stats():
             store_id = policy.scoped_store_id(store_id)
 
-        data = self.ctrl.get_dashboard_data(s_date, e_date, store_id)
+        try:
+            data = self.ctrl.get_dashboard_data(s_date, e_date, store_id, self.user_info)
+        except Exception as e:
+            logger.error("Error fetching dashboard data in view: %s", e, exc_info=True)
+            QMessageBox.critical(self, "خطأ في جلب الإحصائيات", f"تعذر تحميل بيانات الإحصائيات من قاعدة البيانات:\n{e}")
+            return
+
         self.last_dashboard_data = data
-        m = data['metrics']
+        m = data.get('metrics') or {}
 
         # Update Cards
         sales_growth = m.get('sales_growth', 0)
@@ -600,8 +606,7 @@ class StatsView(QWidget):
         e_date = self.date_to.date().toString("yyyy-MM-dd")
         store_id = self.store_combo.currentData()
         
-        # profit_loss_dialog uses db_manager param, we can pass our repo which now has the exact methods!
-        dialog = ProfitLossDialog(s_date, e_date, store_id, self.ctrl.repo, self)
+        dialog = ProfitLossDialog(s_date, e_date, store_id, self.ctrl, self)
         dialog.exec()
 
     def _show_customize(self):

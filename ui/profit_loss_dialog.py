@@ -11,12 +11,12 @@ class ProfitLossDialog(QDialog):
     تعرض الإيرادات، التكاليف (COGS)، والمصروفات التشغيلية بشكل محاسبي منظم.
     """
     
-    def __init__(self, start_date, end_date, store_id, db_manager, parent=None):
+    def __init__(self, start_date, end_date, store_id, stats_service, parent=None):
         super().__init__(parent)
         self.start_date = start_date
         self.end_date = end_date
         self.store_id = store_id
-        self.db = db_manager
+        self.db = stats_service
         
         self.setWindowTitle("تقرير الأرباح والخسائر (Profit & Loss)")
         self.setMinimumSize(800, 700)
@@ -80,8 +80,14 @@ class ProfitLossDialog(QDialog):
 
     def load_data(self):
         try:
-            # 1. Fetch Profit Stats
-            stats = self.db.get_net_profit_stats(self.start_date, self.end_date, self.store_id)
+            # 1. Fetch Profit Stats & Expenses via Service/Controller or Repo
+            if hasattr(self.db, "get_profit_loss_data"):
+                pl_data = self.db.get_profit_loss_data(self.start_date, self.end_date, self.store_id)
+                stats = pl_data.get("net_profit_stats", {})
+                expenses_breakdown = pl_data.get("expenses_breakdown", [])
+            else:
+                stats = self.db.get_net_profit_stats(self.start_date, self.end_date, self.store_id)
+                expenses_breakdown = self.db.get_expenses_breakdown(self.start_date, self.end_date, self.store_id)
             
             total_sales = stats.get('total_sales', 0)
             total_returns = stats.get('total_returns', 0)
@@ -93,9 +99,7 @@ class ProfitLossDialog(QDialog):
             
             gross_profit = net_sales - net_cogs
             
-            # 2. Expenses Breakdown
-            expenses_breakdown = self.db.get_expenses_breakdown(self.start_date, self.end_date, self.store_id)
-            total_expenses = sum(float(x['total']) for x in expenses_breakdown)
+            total_expenses = sum(float(x['total']) for x in expenses_breakdown) if expenses_breakdown else 0.0
             
             net_profit = gross_profit - total_expenses
             
