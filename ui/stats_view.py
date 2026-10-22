@@ -31,6 +31,7 @@ class StatsView(QWidget):
         self.user_info = user_info
         self.view_sections = {}
         self.last_dashboard_data = None
+        self.last_dashboard_context = None
         self.setStyleSheet(f"background-color: {COLORS['bg_main']};")
         self._init_ui()
         self._load_stores()
@@ -434,7 +435,7 @@ class StatsView(QWidget):
     # ═══════════════════════════════════════════════════
 
     def _load_stores(self):
-        stores = self.ctrl.get_stores()
+        stores = self.ctrl.get_stores(self.user_info)
         policy = PermissionPolicy(self.user_info)
         if not policy.can_view_all_stats():
             self.store_combo.clear()
@@ -463,14 +464,19 @@ class StatsView(QWidget):
         if not policy.can_view_all_stats():
             store_id = policy.scoped_store_id(store_id)
 
+        # A failed refresh invalidates the previous result.  Export must never
+        # relabel stale data with the newly selected period or store.
+        self.last_dashboard_data = None
+        self.last_dashboard_context = None
         try:
             data = self.ctrl.get_dashboard_data(s_date, e_date, store_id, self.user_info)
         except Exception as e:
             logger.error("Error fetching dashboard data in view: %s", e, exc_info=True)
-            QMessageBox.critical(self, "خطأ في جلب الإحصائيات", f"تعذر تحميل بيانات الإحصائيات من قاعدة البيانات:\n{e}")
+            QMessageBox.critical(self, "خطأ في جلب الإحصائيات", "تعذر تحميل بيانات الإحصائيات. حاول مرة أخرى لاحقًا.")
             return
 
         self.last_dashboard_data = data
+        self.last_dashboard_context = (s_date, e_date, store_id)
         m = data.get('metrics') or {}
 
         # Update Cards
@@ -578,6 +584,10 @@ class StatsView(QWidget):
 
             s_date = self.date_from.date().toString("yyyy-MM-dd")
             e_date = self.date_to.date().toString("yyyy-MM-dd")
+            selected_store_id = self.store_combo.currentData()
+            if self.last_dashboard_context != (s_date, e_date, selected_store_id):
+                QMessageBox.warning(self, "تنبيه", "يجب تحديث التقرير الحالي قبل التصدير.")
+                return
             store_name = self.store_combo.currentText() or "كل الفروع"
             user_name = self.user_info.get("name") or self.user_info.get("username") or "مستخدم"
 
@@ -606,7 +616,7 @@ class StatsView(QWidget):
         e_date = self.date_to.date().toString("yyyy-MM-dd")
         store_id = self.store_combo.currentData()
         
-        dialog = ProfitLossDialog(s_date, e_date, store_id, self.ctrl, self)
+        dialog = ProfitLossDialog(s_date, e_date, store_id, self.ctrl, self.user_info, self)
         dialog.exec()
 
     def _show_customize(self):

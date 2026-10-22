@@ -37,6 +37,8 @@ from controllers.backup_controller import BackupController
 from controllers.cashier_controller import CashierController
 from controllers.product_controller import ProductController
 from controllers.stats_controller import StatsController
+from application.services.stats_service_facade import StatsServiceFacade
+from repositories.stats_repo import StatsRepository
 from controllers.drawer_controller import DrawerController
 from controllers.admin_controller import AdminController
 from controllers.returns_controller import ReturnsController
@@ -84,7 +86,9 @@ class MainWindow(QMainWindow):
         self.auth_ctrl = AuthController()
         self.cashier_ctrl = CashierController()
         self.product_ctrl = ProductController()
-        self.stats_ctrl = StatsController()
+        # Stats composition root: controllers receive an application service,
+        # never construct a MySQL repository themselves.
+        self.stats_ctrl = StatsController(StatsServiceFacade(StatsRepository()))
         self.drawer_ctrl = DrawerController()
         self.admin_ctrl = AdminController()
         self.returns_ctrl = ReturnsController()

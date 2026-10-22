@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 from ui.styles import COLORS, GLOBAL_STYLE, get_button_style
-from datetime import datetime
+from html import escape
 
 class ProfitLossDialog(QDialog):
     """
@@ -11,12 +11,14 @@ class ProfitLossDialog(QDialog):
     تعرض الإيرادات، التكاليف (COGS)، والمصروفات التشغيلية بشكل محاسبي منظم.
     """
     
-    def __init__(self, start_date, end_date, store_id, stats_service, parent=None):
+    def __init__(self, start_date, end_date, store_id, stats_controller, user_info, parent=None):
         super().__init__(parent)
         self.start_date = start_date
         self.end_date = end_date
         self.store_id = store_id
-        self.db = stats_service
+        self.controller = stats_controller
+        self.user_info = user_info
+        self.pdf_data = None
         
         self.setWindowTitle("تقرير الأرباح والخسائر (Profit & Loss)")
         self.setMinimumSize(800, 700)
@@ -80,14 +82,11 @@ class ProfitLossDialog(QDialog):
 
     def load_data(self):
         try:
-            # 1. Fetch Profit Stats & Expenses via Service/Controller or Repo
-            if hasattr(self.db, "get_profit_loss_data"):
-                pl_data = self.db.get_profit_loss_data(self.start_date, self.end_date, self.store_id)
-                stats = pl_data.get("net_profit_stats", {})
-                expenses_breakdown = pl_data.get("expenses_breakdown", [])
-            else:
-                stats = self.db.get_net_profit_stats(self.start_date, self.end_date, self.store_id)
-                expenses_breakdown = self.db.get_expenses_breakdown(self.start_date, self.end_date, self.store_id)
+            pl_data = self.controller.get_profit_loss_data(
+                self.start_date, self.end_date, self.store_id, self.user_info
+            )
+            stats = pl_data.get("net_profit_stats", {})
+            expenses_breakdown = pl_data.get("expenses_breakdown", [])
             
             total_sales = stats.get('total_sales', 0)
             total_returns = stats.get('total_returns', 0)
@@ -161,7 +160,10 @@ class ProfitLossDialog(QDialog):
             }
 
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"حدث خطأ أثناء تحميل البيانات: {e}")
+            # Technical details remain in the application log, not in a financial UI.
+            import logging
+            logging.getLogger(__name__).error("Unable to load P&L report: %s", e, exc_info=True)
+            QMessageBox.critical(self, "خطأ", "تعذر تحميل قائمة الدخل. لم يتم إنشاء تقرير بديل.")
 
     def add_section_header(self, text, indicator_color):
         lbl = QLabel(text)
@@ -220,13 +222,15 @@ class ProfitLossDialog(QDialog):
     def export_pdf(self):
         try:
             from utils.printer_service import PrinterService
-            
+            if not self.pdf_data:
+                QMessageBox.warning(self, "تنبيه", "لا توجد قائمة دخل صالحة للتصدير.")
+                return
             d = self.pdf_data
             expenses_html = ""
             for exp in d['expenses']:
                 expenses_html += f"""
                 <tr>
-                    <td style='padding: 5px; color: #555;'>{exp['expense_type']}</td>
+                    <td style='padding: 5px; color: #555;'>{escape(str(exp.get('expense_type') or 'أخرى'))}</td>
                     <td style='padding: 5px; text-align: left;'>{float(exp['total']):,.2f}</td>
                 </tr>
                 """
@@ -293,4 +297,6 @@ class ProfitLossDialog(QDialog):
                 QMessageBox.warning(self, "خطأ", "فشل أثناء حفظ الملف")
                 
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"حدث خطأ أثناء تصدير PDF: {e}")
+            import logging
+            logging.getLogger(__name__).error("Unable to export P&L PDF: %s", e, exc_info=True)
+            QMessageBox.critical(self, "خطأ", "تعذر تصدير قائمة الدخل.")

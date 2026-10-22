@@ -1,6 +1,8 @@
 import pytest
 from application.services.stats_service_facade import StatsServiceFacade
-from application.use_cases.stats import DashboardStatsUseCase, StatsStoresUseCase, StatsReportError
+from application.use_cases.stats import DashboardStatsUseCase, ProfitLossUseCase, StatsStoresUseCase, StatsReportError
+from controllers.stats_controller import StatsController
+from utils.permissions import PermissionDenied
 
 
 
@@ -21,7 +23,7 @@ class FakeStatsRepository:
 
     def get_inventory_valuation(self, store_id=None):
         self.calls.append(("get_inventory_valuation", store_id))
-        return 2500
+        return {"total_value": 2500, "details": [{"product_name": "منتج"}]}
 
     def get_customer_retention_stats(self, date_from, date_to, store_id=None):
         self.calls.append(("get_customer_retention_stats", date_from, date_to, store_id))
@@ -55,12 +57,13 @@ class FakeStatsRepository:
         self.calls.append(("get_payment_method_distribution", date_from, date_to, store_id))
         return [{"payment_method": "Cash", "total": "700"}]
 
-    def get_sales_by_store(self, date_from, date_to):
-        self.calls.append(("get_sales_by_store", date_from, date_to))
-        return [
+    def get_sales_by_store(self, date_from, date_to, store_id=None):
+        self.calls.append(("get_sales_by_store", date_from, date_to, store_id))
+        rows = [
             {"store_name": "الفرع الرئيسي", "total_sales": 600},
             {"store_name": "فرع ثان", "total_sales": 400},
         ]
+        return rows if store_id is None else [rows[store_id - 1]]
 
     def get_top_selling_products(self, limit, date_from, date_to, store_id=None):
         self.calls.append(("get_top_selling_products", limit, date_from, date_to, store_id))
@@ -101,10 +104,22 @@ class FakeStatsRepository:
         self.calls.append(("get_discount_breakdown_details", date_from, date_to, store_id))
         return [{"discount_type": "خصم", "amount": 50, "description": "desc"}]
 
+    def get_net_profit_stats(self, date_from, date_to, store_id=None):
+        self.calls.append(("get_net_profit_stats", date_from, date_to, store_id))
+        return {"net_profit": 500, "profit_margin": 50}
+
+    def get_expenses_breakdown(self, date_from, date_to, store_id=None):
+        self.calls.append(("get_expenses_breakdown", date_from, date_to, store_id))
+        return [{"expense_type": "إيجار", "total": 200}]
+
+
+ADMIN = {"id": 1, "role_id": 1, "store_id": 1}
+MANAGER = {"id": 2, "role_id": 2, "store_id": 1}
+
 
 def test_dashboard_stats_builds_metrics_and_charts():
     repo = FakeStatsRepository()
-    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31")
+    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info=ADMIN)
 
     assert data["metrics"]["total_sales"] == 1000
     assert data["metrics"]["total_returns"] == 100
@@ -130,7 +145,7 @@ def test_stats_service_facade_exposes_repository_for_profit_loss_dialog():
 
 def test_dashboard_stats_passes_store_scope_to_scoped_queries():
     repo = FakeStatsRepository()
-    DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", store_id=2)
+    DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", store_id=2, user_info=ADMIN)
 
     assert ("get_sales_summary", "2026-05-01", "2026-05-31", 2) in repo.calls
     assert ("get_returns_summary", "2026-05-01", "2026-05-31", 2) in repo.calls
@@ -142,7 +157,7 @@ def test_dashboard_stats_passes_store_scope_to_scoped_queries():
 
 def test_dashboard_stats_filters_store_sales_for_selected_store():
     repo = FakeStatsRepository()
-    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", store_id=2)
+    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", store_id=2, user_info=ADMIN)
 
     assert data["store_sales"] == [{"store_name": "فرع ثان", "total_sales": 400}]
 
@@ -151,7 +166,7 @@ def test_dashboard_stats_handles_zero_sales_return_rate():
     repo = FakeStatsRepository()
     repo.get_sales_summary = lambda date_from, date_to, store_id=None: {"total_sales": 0}
 
-    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31")
+    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info=ADMIN)
 
     assert data["metrics"]["return_rate"] == 0
 
@@ -161,19 +176,14 @@ def test_dashboard_stats_raises_error_on_repository_failure():
     repo.fail_on_sales = True
 
     with pytest.raises(StatsReportError):
-        DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31")
+        DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info=ADMIN)
 
 
 def test_dashboard_stats_permission_scoping_hides_sensitive_data():
     repo = FakeStatsRepository()
     # Cashier user: role_id = 3, store_id = 1
-    cashier_user = {"role_id": 3, "store_id": 1}
-    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info=cashier_user)
-
-    # Cashier does not have can_view_all_stats or can_view_detailed_stats
-    assert data["supplier_stats"] == []
-    assert data["product_sales_report"] == []
-    assert data["inventory_details"] == []
+    with pytest.raises(PermissionDenied):
+        DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info={"id": 3, "role_id": 3, "store_id": 1})
 
 
 def test_stats_service_facade_get_profit_loss_data():
@@ -182,7 +192,7 @@ def test_stats_service_facade_get_profit_loss_data():
     repo.get_expenses_breakdown = lambda df, dt, sid: [{"expense_type": "إيجار", "total": 200}]
     
     service = StatsServiceFacade(repo)
-    pl = service.get_profit_loss_data("2026-05-01", "2026-05-31", store_id=1)
+    pl = service.get_profit_loss_data("2026-05-01", "2026-05-31", store_id=1, user_info=ADMIN)
 
     assert pl["net_profit_stats"] == {"net_profit": 500}
     assert pl["expenses_breakdown"] == [{"expense_type": "إيجار", "total": 200}]
@@ -191,9 +201,58 @@ def test_stats_service_facade_get_profit_loss_data():
 def test_stats_stores_returns_all_stores():
     repo = FakeStatsRepository()
 
-    stores = StatsStoresUseCase(repo).execute()
+    stores = StatsStoresUseCase(repo).execute(ADMIN)
 
     assert stores == [
         {"id": 1, "store_name": "الفرع الرئيسي"},
         {"id": 2, "store_name": "فرع ثان"},
     ]
+
+
+@pytest.mark.parametrize("user_info", [None, {}, {"id": 1}])
+def test_dashboard_rejects_missing_or_unverified_identity_before_repository_access(user_info):
+    repo = FakeStatsRepository()
+    with pytest.raises(PermissionDenied):
+        DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info=user_info)
+    assert repo.calls == []
+
+
+def test_branch_user_cannot_request_another_store_and_never_fetches_it():
+    repo = FakeStatsRepository()
+    with pytest.raises(PermissionDenied):
+        DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", store_id=2, user_info=MANAGER)
+    assert repo.calls == []
+
+
+def test_branch_stats_are_scoped_and_do_not_fetch_cost_details():
+    repo = FakeStatsRepository()
+    data = DashboardStatsUseCase(repo).execute("2026-05-01", "2026-05-31", user_info=MANAGER)
+    assert ("get_sales_summary", "2026-05-01", "2026-05-31", 1) in repo.calls
+    assert not any(call[0] == "get_inventory_valuation" for call in repo.calls)
+    assert "net_profit" not in data["metrics"]
+
+
+def test_profit_loss_requires_cost_permission_and_enforces_store_scope():
+    repo = FakeStatsRepository()
+    use_case = ProfitLossUseCase(repo)
+    with pytest.raises(PermissionDenied):
+        use_case.execute("2026-05-01", "2026-05-31", 1, MANAGER)
+    with pytest.raises(PermissionDenied):
+        use_case.execute("2026-05-01", "2026-05-31", 2, {"id": 3, "role_id": 6, "store_id": 1})
+    assert use_case.execute("2026-05-01", "2026-05-31", None, ADMIN)["net_profit_stats"]["net_profit"] == 500
+
+
+def test_profit_loss_service_rejects_missing_user_before_fetching_data():
+    repo = FakeStatsRepository()
+    with pytest.raises(PermissionDenied):
+        StatsServiceFacade(repo).get_profit_loss_data("2026-05-01", "2026-05-31", store_id=1)
+    assert repo.calls == []
+
+
+def test_stats_controller_accepts_a_fully_fake_service_without_a_repository():
+    class FakeService:
+        def get_stores(self, user_info):
+            return []
+
+    controller = StatsController(FakeService())
+    assert controller.get_stores(ADMIN) == []

@@ -1,4 +1,9 @@
-from typing import Dict, List, Optional, Protocol
+from typing import Dict, List, Optional, Protocol, TypedDict
+
+
+class InventoryValuation(TypedDict):
+    total_value: float
+    details: List[Dict]
 
 
 class StatsRepositoryPort(Protocol):
@@ -8,7 +13,7 @@ class StatsRepositoryPort(Protocol):
     def get_returns_summary(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> Dict:
         ...
 
-    def get_inventory_valuation(self, store_id: Optional[int] = None) -> float:
+    def get_inventory_valuation(self, store_id: Optional[int] = None) -> InventoryValuation:
         ...
 
     def get_customer_retention_stats(
@@ -55,7 +60,7 @@ class StatsRepositoryPort(Protocol):
     ) -> List[Dict]:
         ...
 
-    def get_sales_by_store(self, date_from: str, date_to: str) -> List[Dict]:
+    def get_sales_by_store(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> List[Dict]:
         ...
 
     def get_top_selling_products(
@@ -106,5 +111,11 @@ class StatsRepositoryPort(Protocol):
         ...
 
     def get_discount_breakdown_details(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> List[Dict]:
+        ...
+
+    def get_net_profit_stats(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> Dict:
+        ...
+
+    def get_expenses_breakdown(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> List[Dict]:
         ...
 

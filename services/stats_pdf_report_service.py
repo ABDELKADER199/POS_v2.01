@@ -214,18 +214,20 @@ class StatsPdfReportService:
     def _metrics_table(self, metrics: dict[str, Any]) -> str:
         cards = [
             ("إجمالي المبيعات", self._money(metrics.get("total_sales")), ""),
-            ("صافي الربح", self._money(metrics.get("net_profit")), self._class_for(metrics.get("net_profit"))),
             ("عدد الفواتير", self._number(metrics.get("invoice_count")), ""),
             ("متوسط البيع", self._money(metrics.get("avg_ticket")), ""),
-            ("هامش الربح", f'{float(metrics.get("profit_margin") or 0):.1f}%', ""),
             ("المرتجعات", self._money(metrics.get("total_returns")), "negative"),
-            ("المقبوضات النقدية", self._money(metrics.get("cash_in")), "positive"),
-            ("المدفوعات النقدية", self._money(metrics.get("cash_out")), "negative"),
-            ("صافي الحركة النقدية", self._money(metrics.get("net_cash")), self._class_for(metrics.get("net_cash"))),
-            ("السيولة الحالية", self._money(metrics.get("vault_liquidity")), self._class_for(metrics.get("vault_liquidity"))),
-            ("إجمالي المسدد", self._money(metrics.get("total_paid")), "positive"),
-            ("إجمالي المديونية", self._money(metrics.get("total_debt")), "negative"),
         ]
+        sensitive_cards = [
+            ("صافي الربح", "net_profit"), ("هامش الربح", "profit_margin"),
+            ("المقبوضات النقدية", "cash_in"), ("المدفوعات النقدية", "cash_out"),
+            ("صافي الحركة النقدية", "net_cash"), ("السيولة الحالية", "vault_liquidity"),
+            ("إجمالي المسدد", "total_paid"), ("إجمالي المديونية", "total_debt"),
+        ]
+        for label, key in sensitive_cards:
+            if key in metrics:
+                value = f'{float(metrics[key] or 0):.1f}%' if key == "profit_margin" else self._money(metrics[key])
+                cards.append((label, value, self._class_for(metrics[key]) if key != "profit_margin" else ""))
         rows = []
         for index in range(0, len(cards), 3):
             cells = "".join(self._metric_cell(*card) for card in cards[index:index + 3])

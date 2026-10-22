@@ -287,6 +287,36 @@ class PermissionPolicy:
     def can(self, permission: str) -> bool:
         return permission in self.permissions
 
+    def has_verified_identity(self) -> bool:
+        """Return True only for the login payload shape used by the desktop app."""
+        user_id = get_user_id(self.user)
+        try:
+            return isinstance(self.user, dict) and int(user_id) > 0
+        except (TypeError, ValueError):
+            return False
+
+    def require_stats_access(self) -> None:
+        if not self.has_verified_identity():
+            raise PermissionDenied("تعذر التحقق من هوية المستخدم")
+        if not (self.can(Permission.VIEW_ALL_STATS) or self.can(Permission.VIEW_BRANCH_STATS)):
+            raise PermissionDenied("لا تملك صلاحية عرض الإحصائيات")
+
+    def authorized_stats_store_id(self, requested_store_id=None):
+        """Resolve the only dashboard scope a verified user may query.
+
+        ``None`` means all stores only for roles that explicitly have that scope.
+        Branch users are always bound to their assigned store.
+        """
+        self.require_stats_access()
+        if self.can(Permission.VIEW_ALL_STATS):
+            if requested_store_id is None:
+                return None
+            try:
+                return int(requested_store_id)
+            except (TypeError, ValueError):
+                raise PermissionDenied("معرّف الفرع غير صالح")
+        return require_store_id(self.user, requested_store_id)
+
     def require(self, permission: str, message: str = "لا تملك صلاحية تنفيذ هذه العملية") -> None:
         if not self.can(permission):
             raise PermissionDenied(message)

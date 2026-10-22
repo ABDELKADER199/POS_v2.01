@@ -22,22 +22,14 @@ def stats_repo_with(one=None, rows=None):
     return repo
 
 
-def test_sales_summary_applies_store_filter_and_uses_profit_stats(monkeypatch):
+def test_sales_summary_applies_store_filter_without_fetching_profit_details():
     repo = stats_repo_with(one={"total_sales": 1000, "invoice_count": 4, "avg_ticket": 250})
-    monkeypatch.setattr(
-        repo,
-        "get_net_profit_stats",
-        lambda date_from, date_to, store_id=None: {"net_profit": 200, "net_sales": 800},
-    )
-
     result = repo.get_sales_summary("2026-05-01", "2026-05-31", store_id=3)
 
     assert result == {
         "total_sales": 1000.0,
-        "net_profit": 200.0,
         "invoice_count": 4,
         "avg_ticket": 250.0,
-        "profit_margin": 25.0,
     }
     query = repo.calls[0][1]
     params = repo.calls[0][2]

@@ -15,7 +15,7 @@ class StatsRepository(BaseRepository):
 
     # ── Key Metrics ────────────────────────────────────
     def get_sales_summary(self, date_from: str, date_to: str, store_id: int = None) -> Dict:
-        """ملخص المبيعات الأساسي مع ربح صافٍ مطابق لمنطق التطبيق القديم."""
+        """ملخص المبيعات غير الحساس؛ الربح والتكلفة لهما استعلام مفوض منفصل."""
         store_filter = "AND i.store_id = %s" if store_id else ""
         params = [date_from, date_to]
         if store_id:
@@ -36,17 +36,10 @@ class StatsRepository(BaseRepository):
         invoice_count = int(row.get('invoice_count', 0)) if row else 0
         avg_ticket = float(row.get('avg_ticket', 0)) if row else 0
 
-        profit_stats = self.get_net_profit_stats(date_from, date_to, store_id)
-        net_profit = float(profit_stats.get('net_profit', 0) or 0)
-        net_sales = float(profit_stats.get('adjusted_net_sales', profit_stats.get('net_sales', total_sales)) or 0)
-        profit_margin = (net_profit / net_sales * 100) if net_sales > 0 else 0
-
         return {
             'total_sales': total_sales,
-            'net_profit': net_profit,
             'invoice_count': invoice_count,
             'avg_ticket': avg_ticket,
-            'profit_margin': profit_margin,
         }
 
     def get_returns_summary(self, date_from: str, date_to: str, store_id: int = None) -> Dict:
@@ -419,9 +412,13 @@ class StatsRepository(BaseRepository):
         return result
 
     # ── Branch Performance ─────────────────────────────
-    def get_sales_by_store(self, date_from: str, date_to: str) -> List[Dict]:
+    def get_sales_by_store(self, date_from: str, date_to: str, store_id: int = None) -> List[Dict]:
         """مبيعات كل فرع"""
-        return self._fetch_all("""
+        store_filter = "AND s.id = %s" if store_id is not None else ""
+        params = [date_from, date_to]
+        if store_id is not None:
+            params.append(store_id)
+        return self._fetch_all(f"""
             SELECT s.store_name,
                    COALESCE(SUM(i.total_amount), 0) as total_sales,
                    COUNT(i.id) as invoice_count
@@ -431,9 +428,10 @@ class StatsRepository(BaseRepository):
                 AND DATE(i.invoice_date) BETWEEN %s AND %s
             WHERE COALESCE(s.is_active, TRUE) = TRUE
               AND COALESCE(s.store_type, 'Branch') != 'GM'
+              {store_filter}
             GROUP BY s.id, s.store_name
             ORDER BY total_sales DESC
-        """, (date_from, date_to))
+        """, tuple(params))
 
     # ── Top Products ───────────────────────────────────
     def get_top_selling_products(self, limit: int, date_from: str, date_to: str,
