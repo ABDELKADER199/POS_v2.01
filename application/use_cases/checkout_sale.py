@@ -5,7 +5,7 @@ from models.invoice import InvoiceItem, TaxInvoiceDetails
 
 
 class CheckoutSaleUseCase:
-    MIN_PROFIT_RATE = -1.0  # Allow below cost sales
+    MIN_PROFIT_RATE = 0.05  # Require minimum 5% markup over buy cost
 
     def __init__(
         self,
@@ -227,7 +227,7 @@ class CheckoutSaleUseCase:
             final_total = round(item_gross - item_discount, 2)
             minimum_total = round(buy_price * (1 + self.MIN_PROFIT_RATE) * quantity, 2)
 
-            if False:  # final_total + 0.01 < minimum_total: (Profit block removed)
+            if final_total + 0.01 < minimum_total:
                 minimum_unit_price = round(buy_price * (1 + self.MIN_PROFIT_RATE), 2)
                 max_discount = max(round(item_gross - minimum_total, 2), 0.0)
                 raise ValueError(

@@ -235,12 +235,30 @@ def test_branch_stats_are_scoped_and_do_not_fetch_cost_details():
 def test_profit_loss_requires_cost_permission_and_enforces_store_scope():
     repo = FakeStatsRepository()
     use_case = ProfitLossUseCase(repo)
-    with pytest.raises(PermissionDenied):
-        use_case.execute("2026-05-01", "2026-05-31", 1, MANAGER)
-    with pytest.raises(PermissionDenied):
-        use_case.execute("2026-05-01", "2026-05-31", 2, {"id": 3, "role_id": 6, "store_id": 1})
-    assert use_case.execute("2026-05-01", "2026-05-31", None, ADMIN)["net_profit_stats"]["net_profit"] == 500
 
+    # المدير لا يملك صلاحية التكلفة.
+    with pytest.raises(PermissionDenied):
+        use_case.execute(
+            "2026-05-01", "2026-05-31", 1, MANAGER
+        )
+
+    # المدير المرتبط بالفرع 1 لا يستطيع طلب الفرع 2.
+    branch_manager = {"id": 3, "role_id": 2, "store_id": 1}
+    with pytest.raises(PermissionDenied):
+        use_case.execute(
+            "2026-05-01", "2026-05-31", 2, branch_manager
+        )
+
+    # يجب رفض الطلبين السابقين قبل استدعاء المستودع.
+    assert repo.calls == []
+
+    # يبقى مسار المستخدم الإداري المصرح له متاحًا.
+    assert (
+        use_case.execute(
+            "2026-05-01", "2026-05-31", None, ADMIN
+        )["net_profit_stats"]["net_profit"]
+        == 500
+    )
 
 def test_profit_loss_service_rejects_missing_user_before_fetching_data():
     repo = FakeStatsRepository()
