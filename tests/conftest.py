@@ -1,3 +1,4 @@
+import runtime_hooks.pyqt6_dll_paths
 import shutil
 import tempfile
 from pathlib import Path

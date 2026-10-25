@@ -1,6 +1,8 @@
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
+from application.dto.stats import ExpenseLine, ProfitLossReport, as_decimal
+from application.ports.report_export_port import ReportExportPort
 from application.ports.stats_port import StatsRepositoryPort
 from utils.permissions import PermissionDenied, PermissionPolicy
 
@@ -28,7 +30,10 @@ class DashboardStatsUseCase:
             sales = self.repo.get_sales_summary(date_from, date_to, store_id) or {}
             if can_view_detailed:
                 # Cost/profit figures are requested only after the permission gate.
-                sales = {**sales, **(self.repo.get_net_profit_stats(date_from, date_to, store_id) or {})}
+                financial_report = build_profit_loss_report(
+                    self.repo.get_profit_loss_inputs(date_from, date_to, store_id)
+                )
+                sales = {**financial_report.as_dict(), **sales}
             returns = self.repo.get_returns_summary(date_from, date_to, store_id) or {}
             retention = self.repo.get_customer_retention_stats(date_from, date_to, store_id) or {}
             treasury = self.repo.get_treasury_period_totals(date_from, date_to, store_id) or {} if can_view_detailed else {}
@@ -55,10 +60,17 @@ class DashboardStatsUseCase:
             prev_from = prev_d1.strftime("%Y-%m-%d")
             prev_to = prev_d2.strftime("%Y-%m-%d")
             prev_sales = self.repo.get_sales_summary(prev_from, prev_to, store_id) or {}
-            prev_profit = self.repo.get_net_profit_stats(prev_from, prev_to, store_id) or {} if can_view_detailed else {}
+            prev_profit = (
+                build_profit_loss_report(self.repo.get_profit_loss_inputs(prev_from, prev_to, store_id)).as_dict()
+                if can_view_detailed else {}
+            )
             prev_discounts = self.repo.get_discounts_summary(prev_from, prev_to, store_id) or {}
 
             return {
+                "capabilities": {
+                    "can_view_all_stats": can_view_all,
+                    "can_view_detailed_stats": can_view_detailed,
+                },
                 "metrics": self._build_metrics(
                     sales,
                     returns,
@@ -207,22 +219,82 @@ class StatsStoresUseCase:
         return [store for store in stores if store.get("id") == store_id]
 
 
+def build_profit_loss_report(raw: Mapping[str, Any]) -> ProfitLossReport:
+    """Apply every P&L business formula once, using Decimal arithmetic."""
+    expenses = tuple(
+        ExpenseLine(
+            expense_type=str(row.get("expense_type") or "أخرى"),
+            total=as_decimal(row.get("total")),
+        )
+        for row in (raw.get("expenses_breakdown") or [])
+    )
+    return ProfitLossReport(
+        total_sales=as_decimal(raw.get("total_sales")),
+        total_returns=as_decimal(raw.get("total_returns")),
+        supplier_promotion_claims=as_decimal(raw.get("supplier_promotion_claims")),
+        total_cogs=as_decimal(raw.get("total_cogs")),
+        total_returned_cost=as_decimal(raw.get("total_returned_cost")),
+        expenses=expenses,
+        invoice_count=int(raw.get("invoice_count") or 0),
+    )
+
+
 class ProfitLossUseCase:
     """Authorized application path for P&L; the UI never talks to a repository."""
 
     def __init__(self, repo: StatsRepositoryPort):
         self.repo = repo
 
-    def execute(self, date_from: str, date_to: str, store_id: Optional[int], user_info: Optional[dict]) -> Dict:
+    def execute(self, date_from: str, date_to: str, store_id: Optional[int], user_info: Optional[dict]) -> ProfitLossReport:
         policy = PermissionPolicy(user_info)
         scoped_store_id = policy.authorized_stats_store_id(store_id)
         if not policy.can_view_detailed_stats():
             raise PermissionDenied("لا تملك صلاحية عرض قائمة الدخل")
         try:
-            return {
-                "net_profit_stats": self.repo.get_net_profit_stats(date_from, date_to, scoped_store_id) or {},
-                "expenses_breakdown": self.repo.get_expenses_breakdown(date_from, date_to, scoped_store_id) or [],
-            }
+            return build_profit_loss_report(
+                self.repo.get_profit_loss_inputs(date_from, date_to, scoped_store_id)
+            )
         except Exception as exc:
             logger.error("Error fetching P&L data: %s", exc, exc_info=True)
             raise StatsReportError("تعذر تحميل قائمة الدخل. حاول مرة أخرى لاحقًا.") from exc
+
+
+class DashboardExportUseCase:
+    """Reload and authorize dashboard data before handing it to an exporter."""
+
+    def __init__(self, dashboard: DashboardStatsUseCase, exporter: ReportExportPort):
+        self.dashboard = dashboard
+        self.exporter = exporter
+
+    def execute(
+        self, date_from: str, date_to: str, store_id: Optional[int], user_info: Optional[dict],
+        store_name: str, user_name: str,
+    ) -> Mapping[str, Any]:
+        data = self.dashboard.execute(date_from, date_to, store_id, user_info)
+        if not data.get("metrics"):
+            raise StatsReportError("لا توجد بيانات إحصائيات معتمدة للتصدير")
+        try:
+            return self.exporter.export_dashboard(data, date_from, date_to, store_name, user_name)
+        except Exception as exc:
+            logger.error("Dashboard export failed: %s", exc, exc_info=True)
+            raise StatsReportError("تعذر تصدير تقرير الإحصائيات.") from exc
+
+
+class ProfitLossExportUseCase:
+    def __init__(self, profit_loss: ProfitLossUseCase, exporter: ReportExportPort):
+        self.profit_loss = profit_loss
+        self.exporter = exporter
+
+    def execute(
+        self, date_from: str, date_to: str, store_id: Optional[int], user_info: Optional[dict],
+        store_name: str, user_name: str,
+    ) -> Mapping[str, Any]:
+        report = self.profit_loss.execute(date_from, date_to, store_id, user_info)
+        try:
+            return self.exporter.export_profit_loss(
+                report.as_dict() | {"expenses": [line.as_dict() for line in report.expenses]},
+                date_from, date_to, store_name, user_name,
+            )
+        except Exception as exc:
+            logger.error("P&L export failed: %s", exc, exc_info=True)
+            raise StatsReportError("تعذر تصدير قائمة الدخل.") from exc

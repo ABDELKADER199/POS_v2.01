@@ -16,8 +16,6 @@ from ui.custom_charts import SimpleBarChart, DonutChart
 from ui.styles import COLORS, TABLE_STYLE, GLOBAL_STYLE, get_button_style
 from ui.table_helpers import center_item, configure_table
 from controllers.stats_controller import StatsController
-from utils.permissions import PermissionPolicy
-from services.stats_pdf_report_service import StatsPdfReportService
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +23,11 @@ logger = logging.getLogger(__name__)
 class StatsView(QWidget):
     """واجهة عرض إحصائيات المبيعات - Clean Architecture"""
 
-    def __init__(self, ctrl: StatsController, user_info: dict, parent=None):
+    def __init__(self, ctrl: StatsController, user_info: dict, backup_controller=None, parent=None):
         super().__init__(parent)
         self.ctrl = ctrl
         self.user_info = user_info
+        self.backup_controller = backup_controller
         self.view_sections = {}
         self.last_dashboard_data = None
         self.last_dashboard_context = None
@@ -344,24 +343,24 @@ class StatsView(QWidget):
         # Row 3
         self.supplier_stats_table = self._create_table(["المورد", "إجمالي المشتريات", "إجمالي المسدد", "الرصيد المتبقي", "عدد الأصناف", "عدد الفواتير"])
         c_suppliers = self._wrap_container(self.supplier_stats_table, "🤝 إحصائيات الموردين")
-        if not PermissionPolicy(self.user_info).can_view_all_stats():
-            c_suppliers.hide()
+        self.supplier_stats_section = c_suppliers
+        c_suppliers.hide()
         self.view_sections["إحصائيات الموردين"] = c_suppliers
         grid.addWidget(c_suppliers, 3, 0, 1, 2)
 
         self.product_sales_table = self._create_table(["الكود", "اسم الصنف", "الفرع", "التاريخ", "الكمية", "الإيراد", "إجمالي التكلفة"])
         self.product_sales_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         c_product_sales = self._wrap_container(self.product_sales_table, "📦 مبيعات الأصناف اليومية")
-        if not PermissionPolicy(self.user_info).can_view_detailed_stats():
-            c_product_sales.hide()
+        self.product_sales_section = c_product_sales
+        c_product_sales.hide()
         self.view_sections["مبيعات الأصناف اليومية"] = c_product_sales
         grid.addWidget(c_product_sales, 4, 0, 1, 2)
 
         self.inventory_table = self._create_table(["كود الصنف", "اسم الصنف", "الكمية بالمخزن", "سعر الشراء", "إجمالي القيمة"])
         self.inventory_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         c_inventory = self._wrap_container(self.inventory_table, "📦 تقييم البضاعة بالمخازن (حسب الكميات)")
-        if not PermissionPolicy(self.user_info).can_view_detailed_stats():
-            c_inventory.hide()
+        self.inventory_section = c_inventory
+        c_inventory.hide()
         self.view_sections["تقييم البضاعة بالمخازن"] = c_inventory
         grid.addWidget(c_inventory, 5, 0, 1, 2)
 
@@ -436,22 +435,14 @@ class StatsView(QWidget):
 
     def _load_stores(self):
         stores = self.ctrl.get_stores(self.user_info)
-        policy = PermissionPolicy(self.user_info)
-        if not policy.can_view_all_stats():
-            self.store_combo.clear()
-            user_store_id = self.user_info.get('store_id')
-            user_store = next((s for s in stores if s.get('id') == user_store_id), None)
-            self.store_combo.addItem(
-                user_store.get('store_name', 'فرعي') if user_store else 'فرعي',
-                user_store_id,
-            )
+        self.store_combo.clear()
+        if len(stores) == 1:
+            store = stores[0]
+            self.store_combo.addItem(store.get('store_name', 'فرعي'), store.get('id'))
             self.store_combo.setEnabled(False)
             self.store_label.setText("الفرع:")
-            if hasattr(self, 'btn_pl'):
-                self.btn_pl.hide()
-            if hasattr(self, 'btn_backup'):
-                self.btn_backup.hide()
             return
+        self.store_combo.addItem("الكل", None)
         for s in stores:
             self.store_combo.addItem(s['store_name'], s['id'])
 
@@ -459,10 +450,7 @@ class StatsView(QWidget):
         """تحديث جميع البيانات من Controller"""
         s_date = self.date_from.date().toString("yyyy-MM-dd")
         e_date = self.date_to.date().toString("yyyy-MM-dd")
-        policy = PermissionPolicy(self.user_info)
         store_id = self.store_combo.currentData()
-        if not policy.can_view_all_stats():
-            store_id = policy.scoped_store_id(store_id)
 
         # A failed refresh invalidates the previous result.  Export must never
         # relabel stale data with the newly selected period or store.
@@ -477,6 +465,12 @@ class StatsView(QWidget):
 
         self.last_dashboard_data = data
         self.last_dashboard_context = (s_date, e_date, store_id)
+        capabilities = data.get("capabilities", {})
+        self.btn_pl.setVisible(bool(capabilities.get("can_view_detailed_stats")))
+        self.btn_export_pdf.setVisible(True)
+        self.supplier_stats_section.setVisible(bool(capabilities.get("can_view_all_stats")))
+        self.product_sales_section.setVisible(bool(capabilities.get("can_view_detailed_stats")))
+        self.inventory_section.setVisible(bool(capabilities.get("can_view_detailed_stats")))
         m = data.get('metrics') or {}
 
         # Update Cards
@@ -591,12 +585,8 @@ class StatsView(QWidget):
             store_name = self.store_combo.currentText() or "كل الفروع"
             user_name = self.user_info.get("name") or self.user_info.get("username") or "مستخدم"
 
-            result = StatsPdfReportService().create_pdf(
-                self.last_dashboard_data,
-                s_date,
-                e_date,
-                store_name,
-                user_name,
+            result = self.ctrl.export_dashboard(
+                s_date, e_date, selected_store_id, self.user_info, store_name, user_name
             )
             if result.get("saved"):
                 QMessageBox.information(
@@ -608,7 +598,7 @@ class StatsView(QWidget):
                 QMessageBox.warning(self, "تنبيه", "تعذر حفظ تقرير الإحصائيات PDF.")
         except Exception as e:
             logger.error("Error exporting stats PDF: %s", e, exc_info=True)
-            QMessageBox.critical(self, "خطأ", f"حدث خطأ أثناء تصدير تقرير الإحصائيات:\n{e}")
+            QMessageBox.critical(self, "خطأ", "تعذر تصدير تقرير الإحصائيات.")
 
     def _show_pl(self):
         from ui.profit_loss_dialog import ProfitLossDialog
@@ -649,14 +639,12 @@ class StatsView(QWidget):
             menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
 
     def _show_backup(self):
-        from controllers.backup_controller import BackupController
-        from PyQt6.QtWidgets import QMessageBox
-
         try:
+            if self.backup_controller is None:
+                raise RuntimeError("Backup controller is not configured")
             self.setCursor(Qt.CursorShape.WaitCursor)
-            backup_ctrl = BackupController()
             created_by = self.user_info.get('id', 1) if self.user_info else 1
-            success, message = backup_ctrl.execute_backup(backup_type='manual', created_by=created_by)
+            success, message = self.backup_controller.execute_backup(backup_type='manual', created_by=created_by)
             self.setCursor(Qt.CursorShape.ArrowCursor)
 
             if success:
@@ -666,7 +654,7 @@ class StatsView(QWidget):
         except Exception as e:
             self.setCursor(Qt.CursorShape.ArrowCursor)
             logger.error("Error executing backup from stats view: %s", e, exc_info=True)
-            QMessageBox.critical(self, "خطأ", f"حدث خطأ أثناء النسخ الاحتياطي:\n{str(e)}")
+            QMessageBox.critical(self, "خطأ", "تعذر إنشاء النسخة الاحتياطية.")
 
     # ── Filter Presets ────────────────────────────────
 

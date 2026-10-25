@@ -116,6 +116,10 @@ class StatsRepositoryPort(Protocol):
     def get_net_profit_stats(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> Dict:
         ...
 
+    def get_profit_loss_inputs(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> Dict:
+        """Return raw, aggregated financial facts; never calculated profit."""
+        ...
+
     def get_expenses_breakdown(self, date_from: str, date_to: str, store_id: Optional[int] = None) -> List[Dict]:
         ...
 

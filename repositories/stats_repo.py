@@ -44,173 +44,128 @@ class StatsRepository(BaseRepository):
 
     def get_returns_summary(self, date_from: str, date_to: str, store_id: int = None) -> Dict:
         """ملخص المرتجعات - متوافق مع sales_returns"""
-        try:
-            store_filter = "AND r.store_id = %s" if store_id else ""
-            params = [date_from, date_to]
-            if store_id:
-                params.append(store_id)
-
-            row = self._fetch_one(f"""
-                SELECT COALESCE(SUM(r.total_amount), 0) as total_returns,
-                       COUNT(r.id) as return_count
-                FROM sales_returns r
-                WHERE DATE(r.return_date) BETWEEN %s AND %s
-                {store_filter}
-            """, tuple(params))
-
-            return {
-                'total_returns': float(row.get('total_returns', 0)) if row else 0,
-                'return_count': int(row.get('return_count', 0)) if row else 0,
-            }
-        except Exception as e:
-            logger.warning(f"Returns query failed: {e}")
-            return {'total_returns': 0, 'return_count': 0}
+        store_filter = "AND r.store_id = %s" if store_id is not None else ""
+        params = [date_from, date_to]
+        if store_id is not None:
+            params.append(store_id)
+        row = self._fetch_one(f"""
+            SELECT COALESCE(SUM(r.total_amount), 0) as total_returns,
+                   COUNT(r.id) as return_count
+            FROM sales_returns r
+            WHERE DATE(r.return_date) BETWEEN %s AND %s
+            {store_filter}
+        """, tuple(params))
+        return {
+            'total_returns': float(row.get('total_returns', 0)) if row else 0,
+            'return_count': int(row.get('return_count', 0)) if row else 0,
+        }
 
     def get_expenses_breakdown(self, date_from: str = None, date_to: str = None, store_id: int = None) -> List[Dict]:
         """تفصيل المصروفات التشغيلية لتغذية قائمة الدخل"""
-        try:
-            query = "SELECT expense_type, SUM(amount) as total FROM expenses WHERE is_personal = 0"
-            params = []
-            if store_id:
-                query += " AND store_id = %s"
-                params.append(store_id)
-            if date_from and date_to:
-                query += " AND DATE(created_at) BETWEEN %s AND %s"
-                params.extend([date_from, date_to])
-            query += " GROUP BY expense_type ORDER BY total DESC"
+        query = "SELECT expense_type, SUM(amount) as total FROM expenses WHERE is_personal = 0"
+        params = []
+        if store_id is not None:
+            query += " AND store_id = %s"
+            params.append(store_id)
+        if date_from and date_to:
+            query += " AND DATE(created_at) BETWEEN %s AND %s"
+            params.extend([date_from, date_to])
+        query += " GROUP BY expense_type ORDER BY total DESC"
+        return self._fetch_all(query, tuple(params))
+
+    def get_profit_loss_inputs(self, date_from: str, date_to: str, store_id: int = None) -> Dict:
+        """Fetch P&L facts only; financial calculations belong to the use case."""
+        invoice_params = [date_from, date_to]
+        invoice_store_filter = ""
+        if store_id:
+            invoice_store_filter = " AND i.store_id = %s"
+            invoice_params.append(store_id)
+
+        # Sales
+        sales_q = f"""
+            SELECT COALESCE(SUM(i.total_amount), 0) as total_sales,
+                   COUNT(i.id) as invoice_count
+            FROM invoices i
+            WHERE i.status = 'Completed'
+            AND DATE(i.invoice_date) BETWEEN %s AND %s
+            {invoice_store_filter}
+        """
+        sales_data = self._fetch_one(sales_q, tuple(invoice_params))
+
+        # COGS
+        cogs_q = f"""
+            SELECT COALESCE(SUM(ii.quantity * COALESCE(ii.buy_price, p.buy_price, 0)), 0) as total_cogs
+            FROM invoice_items ii
+            JOIN invoices i ON ii.invoice_id = i.id
+            JOIN products p ON ii.product_id = p.id
+            WHERE i.status = 'Completed'
+            AND DATE(i.invoice_date) BETWEEN %s AND %s
+            {invoice_store_filter}
+        """
+        cogs_data = self._fetch_one(cogs_q, tuple(invoice_params))
+
+        # Returns
+        ret_params = [date_from, date_to]
+        ret_store_filter = ""
+        if store_id:
+            ret_store_filter = " AND sr.store_id = %s"
+            ret_params.append(store_id)
             
-            return self._fetch_all(query, tuple(params))
-        except Exception as e:
-            logger.error(f"Error fetching expenses breakdown: {e}")
-            return []
+        ret_q = f"""
+            SELECT COALESCE(SUM(total_amount), 0) as total_returns
+            FROM sales_returns sr
+            WHERE DATE(sr.return_date) BETWEEN %s AND %s
+            {ret_store_filter}
+        """
+        ret_data = self._fetch_one(ret_q, tuple(ret_params))
+
+        # Returned COGS
+        cost_q = f"""
+            SELECT COALESCE(SUM(ri.quantity * COALESCE(ri.buy_price, p.buy_price, 0)), 0) as total_returned_cost
+            FROM sales_returns sr
+            JOIN return_items ri ON sr.id = ri.return_id
+            JOIN products p ON ri.product_id = p.id
+            WHERE DATE(sr.return_date) BETWEEN %s AND %s
+            {ret_store_filter}
+        """
+        cost_data = self._fetch_one(cost_q, tuple(ret_params))
+
+        # Operational expenses
+        expenses = self.get_expenses_breakdown(date_from, date_to, store_id)
+        total_expenses = float(sum(float(x.get('total', 0) or 0) for x in expenses))
+        supplier_claims = self._get_supplier_promotion_claims_total(date_from, date_to, store_id)
+
+        return {
+            'total_sales': float(sales_data.get('total_sales', 0)) if sales_data else 0.0,
+            'supplier_promotion_claims': float(supplier_claims or 0.0),
+            'total_cogs': float(cogs_data.get('total_cogs', 0)) if cogs_data else 0.0,
+            'total_returns': float(ret_data.get('total_returns', 0)) if ret_data else 0.0,
+            'total_returned_cost': float(cost_data.get('total_returned_cost', 0)) if cost_data else 0.0,
+            'total_expenses': total_expenses,
+            'invoice_count': int(sales_data.get('invoice_count', 0)) if sales_data else 0,
+            'expenses_breakdown': expenses,
+        }
 
     def get_net_profit_stats(self, date_from: str, date_to: str, store_id: int = None) -> Dict:
-        """جلب تفاصيل الأرباح والمبيعات والتكلفة لقائمة الدخل"""
-        try:
-            invoice_params = [date_from, date_to]
-            invoice_store_filter = ""
-            if store_id:
-                invoice_store_filter = " AND i.store_id = %s"
-                invoice_params.append(store_id)
-
-            # Sales
-            sales_q = f"""
-                SELECT COALESCE(SUM(i.total_amount), 0) as total_sales,
-                       COUNT(i.id) as invoice_count
-                FROM invoices i
-                WHERE i.status = 'Completed'
-                AND DATE(i.invoice_date) BETWEEN %s AND %s
-                {invoice_store_filter}
-            """
-            sales_data = self._fetch_one(sales_q, tuple(invoice_params))
-
-            # COGS
-            cogs_q = f"""
-                SELECT COALESCE(SUM(ii.quantity * COALESCE(ii.buy_price, p.buy_price, 0)), 0) as total_cogs
-                FROM invoice_items ii
-                JOIN invoices i ON ii.invoice_id = i.id
-                JOIN products p ON ii.product_id = p.id
-                WHERE i.status = 'Completed'
-                AND DATE(i.invoice_date) BETWEEN %s AND %s
-                {invoice_store_filter}
-            """
-            cogs_data = self._fetch_one(cogs_q, tuple(invoice_params))
-
-            # Returns
-            ret_params = [date_from, date_to]
-            ret_store_filter = ""
-            if store_id:
-                ret_store_filter = " AND sr.store_id = %s"
-                ret_params.append(store_id)
-                
-            ret_q = f"""
-                SELECT COALESCE(SUM(total_amount), 0) as total_returns
-                FROM sales_returns sr
-                WHERE DATE(sr.return_date) BETWEEN %s AND %s
-                {ret_store_filter}
-            """
-            ret_data = self._fetch_one(ret_q, tuple(ret_params))
-
-            # Returned COGS
-            cost_q = f"""
-                SELECT COALESCE(SUM(ri.quantity * COALESCE(ri.buy_price, p.buy_price, 0)), 0) as total_returned_cost
-                FROM sales_returns sr
-                JOIN return_items ri ON sr.id = ri.return_id
-                JOIN products p ON ri.product_id = p.id
-                WHERE DATE(sr.return_date) BETWEEN %s AND %s
-                {ret_store_filter}
-            """
-            cost_data = self._fetch_one(cost_q, tuple(ret_params))
-
-            # Operational expenses
-            expense_params = [date_from, date_to]
-            expense_store_filter = ""
-            if store_id:
-                expense_store_filter = " AND store_id = %s"
-                expense_params.append(store_id)
-            expenses_data = self._fetch_one(f"""
-                SELECT COALESCE(SUM(amount), 0) as total_expenses
-                FROM expenses
-                WHERE is_personal = 0
-                  AND DATE(created_at) BETWEEN %s AND %s
-                  {expense_store_filter}
-            """, tuple(expense_params))
-
-            supplier_claims = self._get_supplier_promotion_claims_total(date_from, date_to, store_id)
-
-            total_sales = float(sales_data.get('total_sales', 0)) if sales_data else 0
-            total_cogs = float(cogs_data.get('total_cogs', 0)) if cogs_data else 0
-            invoice_count = int(sales_data.get('invoice_count', 0)) if sales_data else 0
-            total_returns = float(ret_data.get('total_returns', 0)) if ret_data else 0
-            total_returned_cost = float(cost_data.get('total_returned_cost', 0)) if cost_data else 0
-            total_expenses = float(expenses_data.get('total_expenses', 0)) if expenses_data else 0
-
-            net_sales = total_sales - total_returns
-            adjusted_net_sales = net_sales + supplier_claims
-            net_cogs = total_cogs - total_returned_cost
-            gross_profit = adjusted_net_sales - net_cogs
-            net_profit = gross_profit - total_expenses
-
-            return {
-                'total_sales': total_sales,
-                'supplier_promotion_claims': supplier_claims,
-                'adjusted_net_sales': adjusted_net_sales,
-                'total_cogs': total_cogs,
-                'total_returns': total_returns,
-                'total_returned_cost': total_returned_cost,
-                'total_expenses': total_expenses,
-                'invoice_count': invoice_count,
-                'net_sales': net_sales,
-                'net_cogs': net_cogs,
-                'gross_profit': gross_profit,
-                'net_profit': net_profit,
-                'avg_ticket': total_sales / invoice_count if invoice_count > 0 else 0,
-                'profit_margin': (net_profit / adjusted_net_sales * 100) if adjusted_net_sales > 0 else 0,
-                'return_rate': (total_returns / total_sales * 100) if total_sales > 0 else 0,
-            }
-        except Exception as e:
-            logger.error(f"Error fetching P&L stats: {e}")
-            return {}
+        """Legacy raw-input alias retained for callers during the migration."""
+        return self.get_profit_loss_inputs(date_from, date_to, store_id)
 
     def _get_supplier_promotion_claims_total(self, date_from: str, date_to: str, store_id: int = None) -> float:
-        try:
-            store_filter = ""
-            params = [date_from, date_to]
-            if store_id:
-                store_filter = "AND i.store_id = %s"
-                params.append(store_id)
-            row = self._fetch_one(f"""
-                SELECT COALESCE(SUM(spc.amount), 0) AS total
-                FROM supplier_promotion_claims spc
-                JOIN invoices i ON spc.sale_invoice_id = i.id
-                WHERE i.status = 'Completed'
-                  AND DATE(i.invoice_date) BETWEEN %s AND %s
-                  AND COALESCE(spc.status, 'pending') != 'cancelled'
-                  {store_filter}
-            """, tuple(params))
-            return float(row.get("total", 0)) if row else 0.0
-        except Exception:
-            return 0.0
+        store_filter = ""
+        params = [date_from, date_to]
+        if store_id is not None:
+            store_filter = "AND i.store_id = %s"
+            params.append(store_id)
+        row = self._fetch_one(f"""
+            SELECT COALESCE(SUM(spc.amount), 0) AS total
+            FROM supplier_promotion_claims spc
+            JOIN invoices i ON spc.sale_invoice_id = i.id
+            WHERE i.status = 'Completed'
+              AND DATE(i.invoice_date) BETWEEN %s AND %s
+              AND COALESCE(spc.status, 'pending') != 'cancelled'
+              {store_filter}
+        """, tuple(params))
+        return row.get("total", 0) if row else 0
 
     # ── Inventory Valuation ────────────────────────────
     def get_inventory_valuation(self, store_id: int = None) -> dict:

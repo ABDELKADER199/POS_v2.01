@@ -1,6 +1,6 @@
 import pytest
 from application.services.stats_service_facade import StatsServiceFacade
-from application.use_cases.stats import DashboardStatsUseCase, ProfitLossUseCase, StatsStoresUseCase, StatsReportError
+from application.use_cases.stats import DashboardStatsUseCase, ProfitLossUseCase, StatsStoresUseCase, StatsReportError, build_profit_loss_report
 from controllers.stats_controller import StatsController
 from utils.permissions import PermissionDenied
 
@@ -108,6 +108,14 @@ class FakeStatsRepository:
         self.calls.append(("get_net_profit_stats", date_from, date_to, store_id))
         return {"net_profit": 500, "profit_margin": 50}
 
+    def get_profit_loss_inputs(self, date_from, date_to, store_id=None):
+        self.calls.append(("get_profit_loss_inputs", date_from, date_to, store_id))
+        return {
+            "total_sales": 1000, "total_returns": 100, "supplier_promotion_claims": 25,
+            "total_cogs": 400, "total_returned_cost": 30, "invoice_count": 5,
+            "expenses_breakdown": [{"expense_type": "إيجار", "total": 200}],
+        }
+
     def get_expenses_breakdown(self, date_from, date_to, store_id=None):
         self.calls.append(("get_expenses_breakdown", date_from, date_to, store_id))
         return [{"expense_type": "إيجار", "total": 200}]
@@ -188,14 +196,24 @@ def test_dashboard_stats_permission_scoping_hides_sensitive_data():
 
 def test_stats_service_facade_get_profit_loss_data():
     repo = FakeStatsRepository()
-    repo.get_net_profit_stats = lambda df, dt, sid: {"net_profit": 500}
-    repo.get_expenses_breakdown = lambda df, dt, sid: [{"expense_type": "إيجار", "total": 200}]
-    
     service = StatsServiceFacade(repo)
     pl = service.get_profit_loss_data("2026-05-01", "2026-05-31", store_id=1, user_info=ADMIN)
 
-    assert pl["net_profit_stats"] == {"net_profit": 500}
+    assert pl.net_profit == 355
     assert pl["expenses_breakdown"] == [{"expense_type": "إيجار", "total": 200}]
+
+
+def test_profit_loss_calculations_use_decimal_and_include_supplier_claims():
+    report = build_profit_loss_report({
+        "total_sales": "100.10", "total_returns": "0.20", "supplier_promotion_claims": "1.05",
+        "total_cogs": "40.20", "total_returned_cost": "0.10", "invoice_count": 2,
+        "expenses_breakdown": [{"expense_type": "Rent", "total": "10.25"}],
+    })
+    assert str(report.net_sales) == "99.90"
+    assert str(report.adjusted_net_sales) == "100.95"
+    assert str(report.net_cogs) == "40.10"
+    assert str(report.gross_profit) == "60.85"
+    assert str(report.net_profit) == "50.60"
 
 
 def test_stats_stores_returns_all_stores():
@@ -257,7 +275,7 @@ def test_profit_loss_requires_cost_permission_and_enforces_store_scope():
         use_case.execute(
             "2026-05-01", "2026-05-31", None, ADMIN
         )["net_profit_stats"]["net_profit"]
-        == 500
+        == 355
     )
 
 def test_profit_loss_service_rejects_missing_user_before_fetching_data():

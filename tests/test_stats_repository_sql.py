@@ -38,55 +38,50 @@ def test_sales_summary_applies_store_filter_without_fetching_profit_details():
     assert params == ("2026-05-01", "2026-05-31", 3)
 
 
-def test_net_profit_stats_calculates_sales_returns_cogs_and_expenses():
+def test_profit_loss_inputs_fetch_raw_sales_returns_cogs_and_expenses():
     repo = stats_repo_with(
         one=[
             {"total_sales": 1000, "invoice_count": 5},
             {"total_cogs": 400},
             {"total_returns": 100},
             {"total_returned_cost": 30},
-            {"total_expenses": 120},
-        ]
+            {"total": 0},
+        ],
+        rows=[{"expense_type": "Rent", "total": 120}],
     )
 
-    result = repo.get_net_profit_stats("2026-05-01", "2026-05-31", store_id=2)
+    result = repo.get_profit_loss_inputs("2026-05-01", "2026-05-31", store_id=2)
 
     assert result["total_sales"] == 1000.0
     assert result["total_cogs"] == 400.0
     assert result["total_returns"] == 100.0
     assert result["total_returned_cost"] == 30.0
     assert result["total_expenses"] == 120.0
-    assert result["net_sales"] == 900.0
-    assert result["net_cogs"] == 370.0
-    assert result["gross_profit"] == 530.0
-    assert result["net_profit"] == 410.0
-    assert result["avg_ticket"] == 200.0
-    assert round(result["profit_margin"], 2) == 45.56
-    assert result["return_rate"] == 10.0
+    assert result["expenses_breakdown"] == [{"expense_type": "Rent", "total": 120}]
     assert all(call[2][-1] == 2 for call in repo.calls if call[0] == "fetch_one")
     assert "COALESCE(ii.buy_price, p.buy_price, 0)" in repo.calls[1][1]
     assert "COALESCE(ri.buy_price, p.buy_price, 0)" in repo.calls[3][1]
 
 
-def test_net_profit_stats_uses_historical_item_costs_not_current_product_costs():
+def test_profit_loss_inputs_use_historical_item_costs_not_current_product_costs():
     repo = stats_repo_with(
         one=[
             {"total_sales": 200, "invoice_count": 1},
             {"total_cogs": 80},
             {"total_returns": 50},
             {"total_returned_cost": 20},
-            {"total_expenses": 10},
-        ]
+            {"total": 0},
+        ], rows=[]
     )
 
-    result = repo.get_net_profit_stats("2026-05-01", "2026-05-31")
+    result = repo.get_profit_loss_inputs("2026-05-01", "2026-05-31")
 
     cogs_query = repo.calls[1][1]
     returned_cogs_query = repo.calls[3][1]
     assert "ii.quantity * COALESCE(ii.buy_price, p.buy_price, 0)" in cogs_query
     assert "ri.quantity * COALESCE(ri.buy_price, p.buy_price, 0)" in returned_cogs_query
-    assert result["net_cogs"] == 60.0
-    assert result["net_profit"] == 80.0
+    assert result["total_cogs"] == 80
+    assert result["total_returned_cost"] == 20
 
 
 def test_total_paid_to_suppliers_uses_treasury_outflows_without_double_counting_ledgers():

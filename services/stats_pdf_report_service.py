@@ -11,7 +11,10 @@ from datetime import datetime
 from typing import Any
 
 from utils.printer_service import PrinterService
-from ui.styles import COLORS
+
+# Report infrastructure deliberately owns its palette.  Importing ui.styles
+# here made PDF export depend on the desktop presentation package.
+COLORS = {"text_on_brand": "#FFFFFF"}
 
 
 class StatsPdfReportService:
@@ -34,6 +37,38 @@ class StatsPdfReportService:
             filename_prefix=filename,
             category="تقارير الإحصائيات",
             auto_open=True,
+        )
+        return {"saved": saved, "pdf_path": pdf_path}
+
+    def export_dashboard(self, data: dict[str, Any], date_from: str, date_to: str, store_name: str, user_name: str) -> dict[str, Any]:
+        return self.create_pdf(data, date_from, date_to, store_name, user_name)
+
+    def export_profit_loss(self, data: dict[str, Any], date_from: str, date_to: str, store_name: str, user_name: str) -> dict[str, Any]:
+        """Render the application-calculated P&L model without recalculation."""
+        rows = "".join(
+            "<tr><td>{}</td><td>{:,.2f}</td></tr>".format(
+                self._safe(expense.get("expense_type") or "أخرى"),
+                float(expense.get("total") or 0),
+            )
+            for expense in data.get("expenses", [])
+        ) or "<tr><td colspan='2'>لا توجد مصروفات مسجلة</td></tr>"
+        money = lambda key: self._money(data.get(key))
+        html_content = f"""
+        <!doctype html><html lang='ar' dir='rtl'><head><meta charset='utf-8'>
+        <style>body{{font-family:Tahoma,Arial;color:#1f2937;padding:24px}} table{{width:100%;border-collapse:collapse}} th,td{{padding:8px;border:1px solid #d1d5db;text-align:right}} th{{background:#10224a;color:#fff}} .total{{font-weight:bold;background:#f3f4f6}}</style>
+        </head><body><h2>قائمة الدخل (الأرباح والخسائر)</h2>
+        <p>الفترة: {self._safe(date_from)} إلى {self._safe(date_to)} | الفرع: {self._safe(store_name)} | أُعد بواسطة: {self._safe(user_name)}</p>
+        <table><tr><th colspan='2'>الإيرادات</th></tr>
+        <tr><td>إجمالي المبيعات</td><td>{money('total_sales')}</td></tr><tr><td>المرتجعات</td><td>{money('total_returns')}</td></tr>
+        <tr class='total'><td>صافي المبيعات</td><td>{money('net_sales')}</td></tr><tr><td>مطالبات عروض الموردين</td><td>{money('supplier_promotion_claims')}</td></tr>
+        <tr class='total'><td>صافي المبيعات المعدلة</td><td>{money('adjusted_net_sales')}</td></tr><tr><th colspan='2'>تكلفة المبيعات</th></tr>
+        <tr><td>تكلفة البضاعة المباعة</td><td>{money('total_cogs')}</td></tr><tr><td>تكلفة البضاعة المرتجعة</td><td>{money('total_returned_cost')}</td></tr>
+        <tr class='total'><td>مجمل الربح</td><td>{money('gross_profit')}</td></tr><tr><th colspan='2'>المصروفات التشغيلية</th></tr>{rows}
+        <tr class='total'><td>إجمالي المصروفات</td><td>{money('total_expenses')}</td></tr><tr class='total'><td>صافي الربح</td><td>{money('net_profit')}</td></tr></table></body></html>"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        saved, pdf_path = PrinterService._save_as_pdf(
+            html_content, width_pts=595, filename_prefix=f"profit_loss_{date_from}_{date_to}_{timestamp}",
+            category="تقارير الإحصائيات", auto_open=True,
         )
         return {"saved": saved, "pdf_path": pdf_path}
 

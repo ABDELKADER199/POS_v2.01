@@ -39,6 +39,7 @@ from controllers.product_controller import ProductController
 from controllers.stats_controller import StatsController
 from application.services.stats_service_facade import StatsServiceFacade
 from repositories.stats_repo import StatsRepository
+from services.stats_pdf_report_service import StatsPdfReportService
 from controllers.drawer_controller import DrawerController
 from controllers.admin_controller import AdminController
 from controllers.returns_controller import ReturnsController
@@ -88,7 +89,9 @@ class MainWindow(QMainWindow):
         self.product_ctrl = ProductController()
         # Stats composition root: controllers receive an application service,
         # never construct a MySQL repository themselves.
-        self.stats_ctrl = StatsController(StatsServiceFacade(StatsRepository()))
+        self.stats_ctrl = StatsController(
+            StatsServiceFacade(StatsRepository(), StatsPdfReportService())
+        )
         self.drawer_ctrl = DrawerController()
         self.admin_ctrl = AdminController()
         self.returns_ctrl = ReturnsController()
@@ -365,7 +368,7 @@ class MainWindow(QMainWindow):
             return view
 
         factories = {
-            "stats": (lambda: StatsView(self.stats_ctrl, user_info), "📊 الإحصائيات"),
+            "stats": (lambda: StatsView(self.stats_ctrl, user_info, self.backup_ctrl), "📊 الإحصائيات"),
             "admin": (lambda: AdminView(self.admin_ctrl, user_info), "🛡️ لوحة الإدارة"),
             "products": (product_view, "📦 المنتجات" if role_id == 5 else "📦 إدارة المنتجات"),
             "inventory_count": (lambda: InventoryCountView(self.inventory_count_ctrl, user_info), "📋 جرد المخزون"),

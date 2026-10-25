@@ -3,7 +3,6 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 from ui.styles import COLORS, GLOBAL_STYLE, get_button_style
-from html import escape
 
 class ProfitLossDialog(QDialog):
     """
@@ -82,25 +81,21 @@ class ProfitLossDialog(QDialog):
 
     def load_data(self):
         try:
-            pl_data = self.controller.get_profit_loss_data(
+            report = self.controller.get_profit_loss_data(
                 self.start_date, self.end_date, self.store_id, self.user_info
             )
-            stats = pl_data.get("net_profit_stats", {})
-            expenses_breakdown = pl_data.get("expenses_breakdown", [])
-            
-            total_sales = stats.get('total_sales', 0)
-            total_returns = stats.get('total_returns', 0)
-            net_sales = total_sales - total_returns
-            
-            total_cogs = stats.get('total_cogs', 0)
-            total_returned_cost = stats.get('total_returned_cost', 0)
-            net_cogs = total_cogs - total_returned_cost
-            
-            gross_profit = net_sales - net_cogs
-            
-            total_expenses = sum(float(x['total']) for x in expenses_breakdown) if expenses_breakdown else 0.0
-            
-            net_profit = gross_profit - total_expenses
+            # The application use case returns these values pre-calculated with
+            # Decimal.  This dialog only renders them.
+            total_sales = report.total_sales
+            total_returns = report.total_returns
+            net_sales = report.net_sales
+            adjusted_net_sales = report.adjusted_net_sales
+            total_cogs = report.total_cogs
+            total_returned_cost = report.total_returned_cost
+            net_cogs = report.net_cogs
+            gross_profit = report.gross_profit
+            total_expenses = report.total_expenses
+            net_profit = report.net_profit
             
             # --- Render UI Sections ---
             
@@ -109,6 +104,8 @@ class ProfitLossDialog(QDialog):
             self.add_line_item("إجمالي المبيعات", total_sales)
             self.add_line_item("يُخصم: المرتجعات", -total_returns, is_deduction=True)
             self.add_subtotal("صافي المبيعات (Net Sales)", net_sales, "#10B981")
+            self.add_line_item("مطالبات عروض الموردين", report.supplier_promotion_claims)
+            self.add_subtotal("صافي المبيعات المعدلة", adjusted_net_sales, "#10B981")
             
             self.add_separator()
             
@@ -128,9 +125,9 @@ class ProfitLossDialog(QDialog):
             # SECTION 3: OPERATING EXPENSES
             self.add_section_header("المصروفات التشغيلية (Op. Expenses)", "#EF4444")
             
-            if expenses_breakdown:
-                for exp in expenses_breakdown:
-                    self.add_line_item(exp['expense_type'] or "أخرى", float(exp['total']))
+            if report.expenses:
+                for exp in report.expenses:
+                    self.add_line_item(exp.expense_type, exp.total)
             else:
                 lbl = QLabel("لا توجد مصروفات مسجلة لهذه الفترة")
                 lbl.setStyleSheet("color: #6B7280; font-style: italic;")
@@ -145,19 +142,7 @@ class ProfitLossDialog(QDialog):
             self.add_subtotal("صافي الربح الفعلي (Net Profit)", net_profit, net_profit_color, font_size=22)
             
             
-            # Store values for PDF export
-            self.pdf_data = {
-                'sales': total_sales,
-                'returns': total_returns,
-                'net_sales': net_sales,
-                'cogs': total_cogs,
-                'ret_cogs': total_returned_cost,
-                'net_cogs': net_cogs,
-                'gross': gross_profit,
-                'expenses': expenses_breakdown,
-                'total_exp': total_expenses,
-                'net_profit': net_profit
-            }
+            self.pdf_data = report
 
         except Exception as e:
             # Technical details remain in the application log, not in a financial UI.
@@ -221,81 +206,19 @@ class ProfitLossDialog(QDialog):
 
     def export_pdf(self):
         try:
-            from utils.printer_service import PrinterService
             if not self.pdf_data:
                 QMessageBox.warning(self, "تنبيه", "لا توجد قائمة دخل صالحة للتصدير.")
                 return
-            d = self.pdf_data
-            expenses_html = ""
-            for exp in d['expenses']:
-                expenses_html += f"""
-                <tr>
-                    <td style='padding: 5px; color: #555;'>{escape(str(exp.get('expense_type') or 'أخرى'))}</td>
-                    <td style='padding: 5px; text-align: left;'>{float(exp['total']):,.2f}</td>
-                </tr>
-                """
-                
-            if not expenses_html:
-                expenses_html = "<tr><td colspan='2' style='text-align:center;'>لا يوجد مصروفات</td></tr>"
-                
-            net_color = "#10B981" if d['net_profit'] >= 0 else "#EF4444"
-            
-            html = f"""
-            <html dir="rtl">
-            <body style="font-family: Arial; padding: 20px; color: #333;">
-                <h2 style="text-align: center; color: #2C3E50;">تقرير الأرباح والخسائر (Statement of Profit & Loss)</h2>
-                <p style="text-align: center; color: #7F8C8D;">الفترة: {self.start_date} إلى {self.end_date}</p>
-                
-                <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px;">
-                    <!-- REVENUES -->
-                    f"<tr style=\"background-color: #3B82F6; color: {COLORS['text_on_brand']};\">"
-                        <th colspan="2" style="padding: 8px; text-align: right;">1. الإيرادات (Revenues)</th>
-                    </tr>
-                    <tr><td style="padding: 5px;">إجمالي المبيعات</td><td style="text-align: left;">{d['sales']:,.2f}</td></tr>
-                    <tr><td style="padding: 5px; color: red;">يُخصم: المرتجعات</td><td style="text-align: left; color: red;">− {d['returns']:,.2f}</td></tr>
-                    <tr style="font-weight: bold; background-color: #f8f9fa;">
-                        <td style="padding: 8px;">صافي المبيعات</td><td style="text-align: left;">{d['net_sales']:,.2f}</td>
-                    </tr>
-                    
-                    <!-- COGS -->
-                    f"<tr style=\"background-color: #F59E0B; color: {COLORS['text_on_brand']};\">"
-                        <th colspan="2" style="padding: 8px; text-align: right; margin-top: 10px;">2. تكلفة المبيعات (COGS)</th>
-                    </tr>
-                    <tr><td style="padding: 5px;">تكلفة البضاعة المباعة</td><td style="text-align: left;">{d['cogs']:,.2f}</td></tr>
-                    <tr><td style="padding: 5px; color: red;">يُخصم: تكلفة البضاعة المرتجعة</td><td style="text-align: left; color: red;">− {d['ret_cogs']:,.2f}</td></tr>
-                    <tr style="font-weight: bold; background-color: #f8f9fa;">
-                        <td style="padding: 8px;">صافي التكلفة</td><td style="text-align: left;">{d['net_cogs']:,.2f}</td>
-                    </tr>
-                    
-                    <!-- GROSS PROFIT -->
-                    <tr style="font-size: 16px; font-weight: bold; background-color: #E0E7FF;">
-                        <td style="padding: 10px;">مُجمل الربح (Gross Profit)</td><td style="text-align: left; color: #4F46E5;">{d['gross']:,.2f}</td>
-                    </tr>
-                    
-                    <!-- EXPENSES -->
-                    f"<tr style=\"background-color: #EF4444; color: {COLORS['text_on_brand']};\">"
-                        <th colspan="2" style="padding: 8px; text-align: right; margin-top: 10px;">3. المصروفات التشغيلية (Expenses)</th>
-                    </tr>
-                    {expenses_html}
-                    <tr style="font-weight: bold; background-color: #f8f9fa;">
-                        <td style="padding: 8px;">إجمالي المصروفات</td><td style="text-align: left;">{d['total_exp']:,.2f}</td>
-                    </tr>
-                    
-                    <!-- NET PROFIT -->
-                    <tr style="font-size: 18px; font-weight: bold; background-color: #F3F4F6;">
-                        <td style="padding: 15px;">صافي الربح الفعلي (Net Profit)</td><td style="text-align: left; color: {net_color};">{d['net_profit']:,.2f} ج.م</td>
-                    </tr>
-                </table>
-            </body>
-            </html>
-            """
-            
-            success = PrinterService._save_as_pdf(html, 595, filename_prefix="Profit_Loss_Statement")
-            if success:
+            store_name = getattr(self.parent(), "store_combo", None)
+            store_name = store_name.currentText() if store_name else "الفرع المحدد"
+            user_name = self.user_info.get("name") or self.user_info.get("username") or "مستخدم"
+            result = self.controller.export_profit_loss(
+                self.start_date, self.end_date, self.store_id, self.user_info, store_name, user_name
+            )
+            if result.get("saved"):
                 QMessageBox.information(self, "نجاح", "تم حفظ تقرير الأرباح والخسائر كـ PDF بنجاح")
             else:
                 QMessageBox.warning(self, "خطأ", "فشل أثناء حفظ الملف")
-                
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("Unable to export P&L PDF: %s", e, exc_info=True)
